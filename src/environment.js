@@ -231,46 +231,47 @@ export class Environment {
   drawMoonWithPhase(x, y, radius, phase) {
     // Save the current context state
     this.ctx.save();
-    
+
     // Draw the base moon (white circle)
     this.ctx.beginPath();
     this.ctx.arc(x, y, radius, 0, Math.PI * 2);
     this.ctx.fillStyle = "rgb(255, 255, 255)"; // Base white
     this.ctx.fill();
-    
-    // Proper phase sequence:
-    // 0.0 = New Moon (fully dark)
-    // 0.25 = First Quarter (right half illuminated)
-    // 0.5 = Full Moon (fully illuminated)
-    // 0.75 = Last Quarter (left half illuminated)
-    // 1.0 = New Moon again (fully dark)
-    
-    // Skip shadow for full moon
-    if (phase !== 0.5) {
+
+    // Handle special cases: New Moon (phase = 0 or 1) and Full Moon (phase = 0.5)
+    if (phase === 0 || phase === 1) {
+      // Fully dark for New Moon
+      this.ctx.beginPath();
+      this.ctx.arc(x, y, radius, 0, Math.PI * 2);
+      this.ctx.fillStyle = "rgba(50, 50, 50, 1)"; // Shadow color
+      this.ctx.fill();
+    } else if (phase === 0.5) {
+      // Fully illuminated for Full Moon (no shadow needed)
+    } else {
       // Setup clipping region to only show within the moon circle
       this.ctx.beginPath();
       this.ctx.arc(x, y, radius, 0, Math.PI * 2);
       this.ctx.clip();
-      
-      // Calculate shadow circle offset
-      // For phases 0-0.5 (New to Full): shadow starts at left (covering moon) and moves leftward (revealing right side)
-      // For phases 0.5-1 (Full to New): shadow starts at right and moves rightward (covering moon from left to right)
+
+      // Calculate the shadow offset based on the phase
       let offset;
       if (phase < 0.5) {
-        // New to Full (0 to 0.5): shadow moves leftward (from 0 to -2*radius)
-        offset = (phase * 4 - 1) * -radius;
+        // Waxing phases (New Moon to Full Moon)
+        // Offset moves from left edge (-radius) to center (0)
+        offset = -radius - (2 * (phase - 0.5) * radius);
       } else {
-        // Full to New (0.5 to 1): shadow moves rightward (from 2*radius to 0)
-        offset = ((1 - phase) * 4 - 1) * radius;
+        // Waning phases (Full Moon to New Moon)
+        // Offset moves from right edge (+radius) to center (0)
+        offset = radius - (2 * (phase - 0.5) * radius);
       }
-      
+
       // Draw the shadow circle
       this.ctx.beginPath();
       this.ctx.arc(x + offset, y, radius, 0, Math.PI * 2);
-      this.ctx.fillStyle = "rgb(50, 50, 50)"; // Shadow color
+      this.ctx.fillStyle = "rgba(50, 50, 50, 0.6)"; // Shadow color
       this.ctx.fill();
     }
-    
+
     // Restore the context state
     this.ctx.restore();
   }
@@ -295,7 +296,7 @@ export class Environment {
 
       // Apply color transition using globalCompositeOperation
       this.ctx.save();
-      
+
       // Calculate yellowness for the moon color
       let yellowness;
       if (t <= 0.825) {
@@ -303,12 +304,12 @@ export class Environment {
       } else {
         yellowness = (t - 0.825) / 0.125;
       }
-      
+
       // Create moon glow color
       const red = 255;
       const green = 250 + 5 * (1 - yellowness);
       const blue = 230 + 25 * (1 - yellowness);
-      
+
       // Add glow effect
       this.ctx.shadowBlur = 15;
       this.ctx.shadowColor = "rgba(255, 255, 255, 0.5)";
@@ -317,14 +318,14 @@ export class Environment {
       this.ctx.fillStyle = "transparent";
       this.ctx.fill();
       this.ctx.shadowBlur = 0;
-      
+
       // Apply subtle color tint
       this.ctx.globalCompositeOperation = "source-atop";
       this.ctx.beginPath();
       this.ctx.arc(x, y, moonRadius, 0, Math.PI * 2);
       this.ctx.fillStyle = `rgba(${red}, ${Math.round(green)}, ${Math.round(blue)}, 0.2)`;
       this.ctx.fill();
-      
+
       this.ctx.restore();
     }
   }
