@@ -139,14 +139,14 @@
                 this.ctx.fillStyle = "rgb(255, 255, 255)"; // Base white
                 this.ctx.fill();
 
-                // Handle special cases: New Moon (phase = 0 or 1) and Full Moon (phase = 0.5)
+                // Handle special cases: New Moon (phase = 0 or 1) and Full Moon (phase ≈ 0.5)
                 if (phase === 0 || phase === 1) {
                     // Fully dark for New Moon
                     this.ctx.beginPath();
                     this.ctx.arc(x, y, radius, 0, Math.PI * 2);
                     this.ctx.fillStyle = "rgba(50, 50, 50, 1)"; // Fully opaque shadow for New Moon
                     this.ctx.fill();
-                } else if (phase === 0.5) {
+                } else if (Math.abs(phase - 0.5) < 0.02) { // Tolerance check for Full Moon
                     // Fully illuminated for Full Moon (no shadow needed)
                 } else {
                     // Setup clipping region to only show within the moon circle
@@ -169,7 +169,7 @@
                     // Draw the shadow circle with reduced opacity
                     this.ctx.beginPath();
                     this.ctx.arc(x + offset, y, radius, 0, Math.PI * 2);
-                    this.ctx.fillStyle = "rgba(50, 50, 50, 0.6)"; // Semi-transparent shadow (60% opacity)
+                    this.ctx.fillStyle = "rgba(50, 50, 50, 0.95)"; // Semi-transparent shadow
                     this.ctx.fill();
                 }
 
