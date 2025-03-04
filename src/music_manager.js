@@ -50,6 +50,7 @@ class MusicManager {
         this.masterVolume = 0.5; // Default to 50% volume
         this.onTrackChange = null; // Callback for track changes
         this.isAutoplayBlocked = false;
+        this.crossfadeDuration = 500; // 500 milliseconds
     }
 
     async initializeMusic() {
@@ -106,49 +107,92 @@ class MusicManager {
     }
 
     playNextTrack() {
-        console.log('Playing next track');
         this.currentTrackIndex = (this.currentTrackIndex + 1) % this.audioTracks.length;
-        
         if (this.currentAudio) {
-            console.log('Stopping previous track');
             this.currentAudio.pause();
         }
-        
         this.currentAudio = this.audioTracks[this.currentTrackIndex];
         
-        // Add a user interaction prompt if autoplay is blocked
+        if (!this.currentAudio) {
+            console.error('No valid audio track at index:', this.currentTrackIndex);
+            return this;
+        }
+
         if (this.isAutoplayBlocked) {
-            console.log('Autoplay blocked. Waiting for user interaction.');
+            window.dispatchEvent(new Event('musicAutoplayBlocked'));
             return this;
         }
 
         try {
-            console.log(`Attempting to play track: ${this.getCurrentTrackName()}`);
             this.currentAudio.play()
                 .then(() => {
-                    console.log('Track started playing successfully');
                     this.isAutoplayBlocked = false;
                 })
                 .catch((error) => {
-                    console.error('Error playing track:', error);
                     if (error.name === 'NotAllowedError') {
                         this.isAutoplayBlocked = true;
-                        // Dispatch a custom event to notify about autoplay blocking
                         window.dispatchEvent(new Event('musicAutoplayBlocked'));
+                    } else {
+                        console.error('Error playing track:', error);
                     }
                 });
         } catch (error) {
             console.error('Unexpected error when playing track:', error);
         }
 
-        // Trigger track change callback if set
         if (typeof this.onTrackChange === 'function') {
             this.onTrackChange();
         }
-        
         return this;
     }
-    
+
+    playPreviousTrack() {
+        this.currentTrackIndex = (this.currentTrackIndex - 1 + this.audioTracks.length) % this.audioTracks.length;
+        if (this.currentAudio) {
+            this.currentAudio.pause();
+        }
+        this.currentAudio = this.audioTracks[this.currentTrackIndex];
+        
+        if (!this.currentAudio) {
+            console.error('No valid audio track at index:', this.currentTrackIndex);
+            return this;
+        }
+
+        if (this.isAutoplayBlocked) {
+            window.dispatchEvent(new Event('musicAutoplayBlocked'));
+            return this;
+        }
+
+        try {
+            this.currentAudio.play()
+                .then(() => {
+                    this.isAutoplayBlocked = false;
+                })
+                .catch((error) => {
+                    if (error.name === 'NotAllowedError') {
+                        this.isAutoplayBlocked = true;
+                        window.dispatchEvent(new Event('musicAutoplayBlocked'));
+                    } else {
+                        console.error('Error playing track:', error);
+                    }
+                });
+        } catch (error) {
+            console.error('Unexpected error when playing track:', error);
+        }
+
+        if (typeof this.onTrackChange === 'function') {
+            this.onTrackChange();
+        }
+        return this;
+    }
+
+    startPlaylist() {
+        if (this.audioTracks.length > 0) {
+            this.playNextTrack();
+        }
+        return this;
+    }
+
     // Method to start playback after user interaction
     startPlaybackAfterInteraction() {
         if (this.isAutoplayBlocked && this.currentAudio) {
