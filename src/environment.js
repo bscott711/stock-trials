@@ -25,10 +25,29 @@ export class Environment {
   }
 
   initializeClouds() {
-    console.log('initializeClouds')
     this.clouds = [];
     const numClouds = 10;
+
+    // Define cloud types and their weights
     const cloudTypes = ['cumulus', 'cirrus', 'stratus'];
+    const weights = [0.4, 0.3, 0.3]; // Cumulus has a higher weight (60% chance)
+
+    // Function to perform weighted random selection
+    function getWeightedRandomCloudType(cloudTypes, weights) {
+      const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+      const random = Math.random() * totalWeight;
+      let cumulativeWeight = 0;
+
+      for (let i = 0; i < weights.length; i++) {
+        cumulativeWeight += weights[i];
+        if (random < cumulativeWeight) {
+          return cloudTypes[i];
+        }
+      }
+
+      // Fallback (should never reach here)
+      return cloudTypes[cloudTypes.length - 1];
+    }
 
     for (let i = 0; i < numClouds; i++) {
       const cloudBase = {
@@ -37,7 +56,7 @@ export class Environment {
         maxSize: Math.random() * 50 + 20,
         speed: Math.random() * 0.5 + 0.2,
         opacity: Math.random() * 0.3 + 0.4,
-        type: cloudTypes[Math.floor(Math.random() * cloudTypes.length)]
+        type: getWeightedRandomCloudType(cloudTypes, weights) // Use weighted random selection
       };
 
       // Add type-specific properties
@@ -51,23 +70,48 @@ export class Environment {
 
       this.clouds.push(cloud);
     }
-}
+  }
 
-addCloudTypeProperties(cloud) {
+  addCloudTypeProperties(cloud) {
     switch (cloud.type) {
       case 'cumulus':
+        // Adjust vertical position to account for the larger size
         cloud.y += this.canvas.height / 16;
+
+        // Define 3 overlapping elliptical puffs with rotation angles
         cloud.puffs = [
-          { offsetX: -cloud.maxSize * 0.2, offsetY: 0, radius: cloud.maxSize * 0.4 },
-          { offsetX: cloud.maxSize * 0.1, offsetY: -cloud.maxSize * 0.15, radius: cloud.maxSize * 0.35 },
-          { offsetX: cloud.maxSize * 0.3, offsetY: cloud.maxSize * 0.1, radius: cloud.maxSize * 0.3 }
+          {
+            offsetX: -cloud.maxSize * 0.2,
+            offsetY: -cloud.maxSize * 0.15,
+            radiusX: cloud.maxSize * 0.8,
+            radiusY: cloud.maxSize * 0.5,
+            rotation: Math.random() * 0.2 - 0.1 // Small random rotation (-0.1 to 0.1 radians)
+          }, // Large puff (top-left)
+          {
+            offsetX: cloud.maxSize * 0.1,
+            offsetY: -cloud.maxSize * 0.1,
+            radiusX: cloud.maxSize * 0.7,
+            radiusY: cloud.maxSize * 0.4,
+            rotation: Math.random() * 0.2 - 0.1 // Small random rotation (-0.1 to 0.1 radians)
+          }, // Medium puff (center)
+          {
+            offsetX: cloud.maxSize * 0.3,
+            offsetY: cloud.maxSize * 0.1,
+            radiusX: cloud.maxSize * 0.6,
+            radiusY: cloud.maxSize * 0.35,
+            rotation: Math.random() * 0.2 - 0.1 // Small random rotation (-0.1 to 0.1 radians)
+          }  // Small puff (bottom-right)
         ];
+
+        // Adjust opacity and speed for larger clouds
         cloud.opacity *= 0.9;
-        cloud.speed *= 0.9;
+        cloud.speed *= 0.8; // Reduce speed slightly for larger clouds
+
+        // Define shadow properties with scaled values
         cloud.shadow = {
-          offsetX: cloud.maxSize * 0.1,
-          offsetY: cloud.maxSize * 0.1,
-          blur: cloud.maxSize * 0.05,
+          offsetX: cloud.maxSize * 0.15, // Scaled offset
+          offsetY: cloud.maxSize * 0.15, // Scaled offset
+          blur: cloud.maxSize * 0.15, // Scaled blur
           opacity: 0.3
         };
         break;
@@ -98,45 +142,13 @@ addCloudTypeProperties(cloud) {
         break;
     }
     return cloud;
-}
+  }
 
-validateCloud(cloud) {
+  validateCloud(cloud) {
     // Ensure all required properties are present
     const requiredProperties = ['x', 'y', 'maxSize', 'speed', 'opacity', 'type'];
     return requiredProperties.every(prop => cloud.hasOwnProperty(prop));
-}
-
-  // // Update the drawClouds method to use Perlin noise
-  // drawClouds(ctx, time) {
-  //   this.clouds.forEach(cloud => {
-  //     // Move clouds
-  //     cloud.x += cloud.speed * this.windDirection;
-
-  //     // Wrap clouds around screen
-  //     if (cloud.x > this.canvas.width + cloud.maxSize) {
-  //       cloud.x = -cloud.maxSize;
-  //     } else if (cloud.x < -cloud.maxSize) {
-  //       cloud.x = this.canvas.width + cloud.maxSize;
-  //     }
-
-  //     // Draw cloud based on type
-  //     ctx.save();
-
-  //     switch(cloud.type) {
-  //       case 'cumulus':
-  //         this.drawCumulusCloud(ctx, cloud);
-  //         break;
-  //       case 'cirrus':
-  //         this.drawCirrusCloud(ctx, cloud);
-  //         break;
-  //       case 'stratus':
-  //         this.drawStratusCloud(ctx, cloud);
-  //         break;
-  //     }
-
-  //     ctx.restore();
-  //   });
-  // }
+  }
 
   lerpColor(color1, color2, t) {
     return {
@@ -213,8 +225,6 @@ validateCloud(cloud) {
   }
 
   drawClouds() {
-    console.log(this.clouds);
-    console.log(this.cloudFreeDays)
     if (this.cloudFreeDays) return;
 
     const t = (this.time % this.cycleDuration) / this.cycleDuration;
@@ -253,39 +263,46 @@ validateCloud(cloud) {
     const centerY = cloud.y;
     const maxSize = cloud.maxSize;
 
+    // Ensure each cloud has a consistent noise offset
+    if (!cloud.noiseOffset) {
+      cloud.noiseOffset = Math.random() * 0.2; // Assign a fixed noise offset once
+    }
+
     const baseColor = `rgba(255, 255, 255, ${opacity})`;
     const shadowColor = `rgba(220, 220, 240, ${opacity * 0.7})`;
 
-    // Define noise for variation
-    const noise = Math.random() * 0.2;
-
-    this.ctx.beginPath();
-    const resolution = 32;
-    for (let i = 0; i <= resolution; i++) {
-      const angle = (i / resolution) * Math.PI * 2;
-      const radius = maxSize * 0.5;
-
-      const variedRadius = radius * (1 + noise);
-      const x = centerX + Math.cos(angle) * variedRadius;
-      const y = centerY + Math.sin(angle) * variedRadius * 0.6;
-
-      if (i === 0) {
-        this.ctx.moveTo(x, y);
-      } else {
-        this.ctx.lineTo(x, y);
-      }
-    }
-
-    this.ctx.closePath();
+    // Use the precomputed noise offset for this cloud
+    const noise = cloud.noiseOffset;
 
     // Draw shadow
+    this.ctx.beginPath();
+    this.ctx.ellipse(
+      centerX + cloud.shadow.offsetX,
+      centerY + cloud.shadow.offsetY,
+      maxSize * 0.5,
+      maxSize * 0.3,
+      0, // No rotation for the shadow
+      0,
+      Math.PI * 2
+    );
     this.ctx.fillStyle = shadowColor;
     this.ctx.fill();
 
-    // Draw main cloud
-    this.ctx.translate(5, 5); // Adjust shadow offset
-    this.ctx.fillStyle = baseColor;
-    this.ctx.fill();
+    // Draw puffs
+    cloud.puffs.forEach(puff => {
+      this.ctx.beginPath();
+      this.ctx.ellipse(
+        centerX + puff.offsetX,
+        centerY + puff.offsetY,
+        puff.radiusX,
+        puff.radiusY,
+        puff.rotation, // Apply rotation angle
+        0, // Start angle
+        Math.PI * 2 // End angle
+      );
+      this.ctx.fillStyle = baseColor;
+      this.ctx.fill();
+    });
 
     this.ctx.restore();
   }
@@ -304,8 +321,13 @@ validateCloud(cloud) {
       { offsetY: -height * 0.3, curve: 0.1, width: 0.7 }
     ];
 
-    // Define noise for variation
-    const noise = Math.random() * 0.2;
+    // Ensure each cloud has a consistent noise offset
+    if (!cloud.noiseOffset) {
+      cloud.noiseOffset = Math.random() * 0.2; // Assign a fixed noise offset once
+    }
+
+    // Use the precomputed noise offset for this cloud
+    const noise = cloud.noiseOffset;
 
     wisps.forEach(wisp => {
       this.ctx.beginPath();
@@ -348,8 +370,13 @@ validateCloud(cloud) {
       { offsetY: height * 0.6, width: 0.7, opacity: 0.6 }
     ];
 
-    // Define noise for variation
-    const noise = Math.random() * 0.2;
+    // Ensure each cloud has a consistent noise offset
+    if (!cloud.noiseOffset) {
+      cloud.noiseOffset = Math.random() * 0.05; // Assign a fixed noise offset once
+    }
+
+    // Use the precomputed noise offset for this cloud
+    const noise = cloud.noiseOffset;
 
     layers.forEach(layer => {
       const layerWidth = width * layer.width;
@@ -588,8 +615,6 @@ validateCloud(cloud) {
 
   newDay() {
     this.cloudFreeDays = 0 //Math.random() > 0.5;
-    console.log('New day:', this.time);
-    console.log(this.cloudFreeDays)
   }
 
   update() {
@@ -602,9 +627,9 @@ validateCloud(cloud) {
 
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.drawSky();
-    this.drawStars();
     this.drawSun();
     this.drawMoon();
     this.drawClouds();
+    this.drawStars();
   }
 }
