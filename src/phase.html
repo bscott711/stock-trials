@@ -146,7 +146,7 @@
                     this.ctx.arc(x, y, radius, 0, Math.PI * 2);
                     this.ctx.fillStyle = "rgba(50, 50, 50, 1)"; // Fully opaque shadow for New Moon
                     this.ctx.fill();
-                } else if (Math.abs(phase - 0.5) < 0.02) { // Tolerance check for Full Moon
+                } else if (Math.abs(phase - 0.5) < 0.03) { // Tolerance check for Full Moon
                     // Fully illuminated for Full Moon (no shadow needed)
                 } else {
                     // Setup clipping region to only show within the moon circle

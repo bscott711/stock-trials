@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Moon Phase SVG</title>
+    <style>
+        .container {
+            text-align: center;
+            margin: 20px;
+        }
+        select {
+            margin-bottom: 10px;
+        }
+        .info {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <select id="phaseSelect">
+            <option value="180">New Moon</option>
+            <option value="-135">Waxing Crescent</option>
+            <option value="-90">First Quarter</option>
+            <option value="-45">Waxing Gibbous</option>
+            <option value="0">Full Moon</option>
+            <option value="45">Waning Gibbous</option>
+            <option value="90">Third Quarter</option>
+            <option value="135">Waning Crescent</option>
+        </select>
+        <svg id="moonSvg" width="228" height="215">
+            <defs>
+                <clipPath id="moonClip">
+                    <circle cx="114" cy="107.5" r="100.5" />
+                </clipPath>
+            </defs>
+            <g id="moonGroup"></g>
+        </svg>
+        <div id="percentIlluminated" class="info"></div>
+        <div class="info">Time since new moon:</div>
+        <div id="timeSinceNew" class="info"></div>
+    </div>
+
+    <script>
+        // Utility functions (normally imported from utils)
+        function degToRad(degrees) {
+            return degrees * Math.PI / 180;
+        }
+
+        function forceNumber(value) {
+            return Number(value);
+        }
+
+        function getPercentIlluminated(moonAngle) {
+            return (1 + Math.cos(moonAngle)) / 2 * 100;
+        }
+
+        function roundToOnePlace(value) {
+            return Math.round(value * 10) / 10;
+        }
+
+        function getPhaseSlot(moonAngle) {
+            // Simplified version returning closest preset angle
+            const slots = [180, -135, -90, -45, 0, 45, 90, 135];
+            return slots.reduce((prev, curr) => 
+                Math.abs(curr - moonAngle) < Math.abs(prev - moonAngle) ? curr : prev
+            );
+        }
+
+        function getTimeSinceNewMoon(moonAngle) {
+            const synodicMonth = 29.530588; // days
+            const phase = convertPhase(moonAngle);
+            return phase * synodicMonth;
+        }
+
+        function formatInterval(days) {
+            return `${Math.round(days)} days`;
+        }
+
+        // Moon drawing logic
+        const radius = 100.5;
+        const centerX = 114;
+        const centerY = 107.5;
+
+        function convertPhase(moonPhase) {
+            let phase = (moonPhase - Math.PI) / (Math.PI * 2);
+            if (phase > 1) return 0;
+            if (phase < 0) return phase + 1;
+            return phase;
+        }
+
+        function drawMoonWithPhase(x, y, radius, phase) {
+            const moonGroup = document.getElementById('moonGroup');
+            moonGroup.innerHTML = ''; // Clear previous content
+
+            // Base moon (white circle)
+            const baseCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            baseCircle.setAttribute('cx', x);
+            baseCircle.setAttribute('cy', y);
+            baseCircle.setAttribute('r', radius);
+            baseCircle.setAttribute('fill', 'rgb(255, 255, 255)');
+            moonGroup.appendChild(baseCircle);
+
+            // Handle special cases and shadow
+            if (phase === 0 || phase === 1) {
+                // New Moon - fully dark
+                const shadowCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                shadowCircle.setAttribute('cx', x);
+                shadowCircle.setAttribute('cy', y);
+                shadowCircle.setAttribute('r', radius);
+                shadowCircle.setAttribute('fill', 'rgba(50, 50, 50, 1)');
+                moonGroup.appendChild(shadowCircle);
+            } else if (Math.abs(phase - 0.5) < 0.005) {
+                // Full Moon - no shadow needed
+            } else {
+                let offset, shadowWidth;
+                if (phase < 0.5) {
+                    // Waxing phases
+                    offset = -radius + (2 * phase * radius);
+                    shadowWidth = radius * (1 - phase * 2);
+                } else {
+                    // Waning phases
+                    offset = radius - (2 * (phase - 0.5) * radius);
+                    shadowWidth = radius * (1 - (1 - phase) * 2);
+                }
+
+                // Shadow ellipse
+                const shadowEllipse = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
+                shadowEllipse.setAttribute('cx', x + offset);
+                shadowEllipse.setAttribute('cy', y);
+                shadowEllipse.setAttribute('rx', shadowWidth);
+                shadowEllipse.setAttribute('ry', radius);
+                shadowEllipse.setAttribute('fill', 'rgba(50, 50, 50, 0.95)');
+                shadowEllipse.setAttribute('clip-path', 'url(#moonClip)');
+                moonGroup.appendChild(shadowEllipse);
+            }
+        }
+
+        // Event handling and updates
+        const phaseSelect = document.getElementById('phaseSelect');
+        const percentIlluminated = document.getElementById('percentIlluminated');
+        const timeSinceNew = document.getElementById('timeSinceNew');
+
+        function updateMoon() {
+            const moonAngle = degToRad(forceNumber(phaseSelect.value));
+            const phase = convertPhase(moonAngle);
+            
+            drawMoonWithPhase(centerX, centerY, radius, phase);
+            
+            percentIlluminated.textContent = 
+                `${roundToOnePlace(getPercentIlluminated(moonAngle - Math.PI))}% illuminated`;
+            timeSinceNew.textContent = formatInterval(getTimeSinceNewMoon(moonAngle));
+        }
+
+        phaseSelect.addEventListener('change', updateMoon);
+        
+        // Initial draw
+        updateMoon();
+    </script>
+</body>
+</html>

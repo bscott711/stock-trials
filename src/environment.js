@@ -3,35 +3,140 @@ export class Environment {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d");
     this.time = 0;
-    this.cycleDuration = 10; // One day = 2 seconds
-    this.cloudFreeDays = Math.random() > 0.5;
+    this.cycleDuration = 10; // One day = 10 seconds
+    this.cloudFreeDays = 0//Math.random() > 0.5;
+    // Initialize clouds and stars
+    this.initializeClouds();
+    this.initializeStars();
+  }
 
-    // Clouds array
-    this.clouds = [];
-    const numClouds = 10;
-    for (let i = 0; i < numClouds; i++) {
-      this.clouds.push({
-        x: Math.random() * canvas.width,
-        y: Math.random() * (canvas.height / 3) + canvas.height / 4,
-        size: Math.random() * 50 + 20,
-        speed: Math.random() * 0.5 + 0.2,
-        opacity: Math.random() * 0.3 + 0.4,
-      });
-    }
-
-    // Stars array
+  initializeStars() {
     this.stars = [];
     const numStars = 100;
     for (let i = 0; i < numStars; i++) {
       this.stars.push({
-        x: Math.random() * canvas.width,
-        y: Math.random() * canvas.height,
+        x: Math.random() * this.canvas.width,
+        y: Math.random() * this.canvas.height,
         radius: Math.random() * 1.5 + 0.5,
         twinkle: Math.random() > 0.8,
         opacity: Math.random() * 0.3 + 0.4,
       });
     }
   }
+
+  initializeClouds() {
+    console.log('initializeClouds')
+    this.clouds = [];
+    const numClouds = 10;
+    const cloudTypes = ['cumulus', 'cirrus', 'stratus'];
+
+    for (let i = 0; i < numClouds; i++) {
+      const cloudBase = {
+        x: Math.random() * this.canvas.width,
+        y: Math.random() * (this.canvas.height / 3) + this.canvas.height / 4,
+        maxSize: Math.random() * 50 + 20,
+        speed: Math.random() * 0.5 + 0.2,
+        opacity: Math.random() * 0.3 + 0.4,
+        type: cloudTypes[Math.floor(Math.random() * cloudTypes.length)]
+      };
+
+      // Add type-specific properties
+      const cloud = this.addCloudTypeProperties(cloudBase);
+
+      // Validate the cloud object
+      if (!this.validateCloud(cloud)) {
+        console.warn('Invalid cloud object:', cloud);
+        continue;
+      }
+
+      this.clouds.push(cloud);
+    }
+}
+
+addCloudTypeProperties(cloud) {
+    switch (cloud.type) {
+      case 'cumulus':
+        cloud.y += this.canvas.height / 16;
+        cloud.puffs = [
+          { offsetX: -cloud.maxSize * 0.2, offsetY: 0, radius: cloud.maxSize * 0.4 },
+          { offsetX: cloud.maxSize * 0.1, offsetY: -cloud.maxSize * 0.15, radius: cloud.maxSize * 0.35 },
+          { offsetX: cloud.maxSize * 0.3, offsetY: cloud.maxSize * 0.1, radius: cloud.maxSize * 0.3 }
+        ];
+        cloud.opacity *= 0.9;
+        cloud.speed *= 0.9;
+        cloud.shadow = {
+          offsetX: cloud.maxSize * 0.1,
+          offsetY: cloud.maxSize * 0.1,
+          blur: cloud.maxSize * 0.05,
+          opacity: 0.3
+        };
+        break;
+
+      case 'cirrus':
+        cloud.y -= this.canvas.height / 8;
+        cloud.wisps = [
+          { offsetY: 0, curve: 0.2, width: 1 },
+          { offsetY: cloud.maxSize * 0.4, curve: -0.15, width: 0.8 },
+          { offsetY: -cloud.maxSize * 0.3, curve: 0.1, width: 0.7 }
+        ];
+        cloud.opacity *= 0.8;
+        cloud.speed *= 0.7;
+        break;
+
+      case 'stratus':
+        cloud.y += this.canvas.height / 12;
+        cloud.layers = [
+          { offsetY: 0, width: 1, opacity: 1 },
+          { offsetY: cloud.maxSize * 0.3, width: 0.85, opacity: 0.8 },
+          { offsetY: cloud.maxSize * 0.6, width: 0.7, opacity: 0.6 }
+        ];
+        cloud.speed *= 0.8;
+        break;
+
+      default:
+        console.warn(`Unknown cloud type: ${cloud.type}`);
+        break;
+    }
+    return cloud;
+}
+
+validateCloud(cloud) {
+    // Ensure all required properties are present
+    const requiredProperties = ['x', 'y', 'maxSize', 'speed', 'opacity', 'type'];
+    return requiredProperties.every(prop => cloud.hasOwnProperty(prop));
+}
+
+  // // Update the drawClouds method to use Perlin noise
+  // drawClouds(ctx, time) {
+  //   this.clouds.forEach(cloud => {
+  //     // Move clouds
+  //     cloud.x += cloud.speed * this.windDirection;
+
+  //     // Wrap clouds around screen
+  //     if (cloud.x > this.canvas.width + cloud.maxSize) {
+  //       cloud.x = -cloud.maxSize;
+  //     } else if (cloud.x < -cloud.maxSize) {
+  //       cloud.x = this.canvas.width + cloud.maxSize;
+  //     }
+
+  //     // Draw cloud based on type
+  //     ctx.save();
+
+  //     switch(cloud.type) {
+  //       case 'cumulus':
+  //         this.drawCumulusCloud(ctx, cloud);
+  //         break;
+  //       case 'cirrus':
+  //         this.drawCirrusCloud(ctx, cloud);
+  //         break;
+  //       case 'stratus':
+  //         this.drawStratusCloud(ctx, cloud);
+  //         break;
+  //     }
+
+  //     ctx.restore();
+  //   });
+  // }
 
   lerpColor(color1, color2, t) {
     return {
@@ -108,7 +213,10 @@ export class Environment {
   }
 
   drawClouds() {
+    console.log(this.clouds);
+    console.log(this.cloudFreeDays)
     if (this.cloudFreeDays) return;
+
     const t = (this.time % this.cycleDuration) / this.cycleDuration;
     const cloudPeak = 0.6;
     const cloudRange = 0.3;
@@ -117,14 +225,184 @@ export class Environment {
     if (cloudVisibility > 0) {
       this.clouds.forEach((cloud) => {
         cloud.x -= cloud.speed;
-        if (cloud.x + cloud.size < 0) cloud.x = this.canvas.width;
+        if (cloud.x + cloud.maxSize < 0) cloud.x = this.canvas.width + cloud.maxSize;
+
         const opacity = cloudVisibility * cloud.opacity;
-        this.ctx.beginPath();
-        this.ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
-        this.ctx.ellipse(cloud.x, cloud.y, cloud.size, cloud.size / 2, 0, 0, Math.PI * 2);
-        this.ctx.fill();
+
+        switch (cloud.type) {
+          case 'cumulus':
+            this.drawCumulusCloud(cloud, opacity);
+            break;
+          case 'cirrus':
+            this.drawCirrusCloud(cloud, opacity);
+            break;
+          case 'stratus':
+            this.drawStratusCloud(cloud, opacity);
+            break;
+          default:
+            this.drawCumulusCloud(cloud, opacity);
+        }
       });
     }
+  }
+
+  drawCumulusCloud(cloud, opacity) {
+    this.ctx.save();
+
+    const centerX = cloud.x;
+    const centerY = cloud.y;
+    const maxSize = cloud.maxSize;
+
+    const baseColor = `rgba(255, 255, 255, ${opacity})`;
+    const shadowColor = `rgba(220, 220, 240, ${opacity * 0.7})`;
+
+    // Define noise for variation
+    const noise = Math.random() * 0.2;
+
+    this.ctx.beginPath();
+    const resolution = 32;
+    for (let i = 0; i <= resolution; i++) {
+      const angle = (i / resolution) * Math.PI * 2;
+      const radius = maxSize * 0.5;
+
+      const variedRadius = radius * (1 + noise);
+      const x = centerX + Math.cos(angle) * variedRadius;
+      const y = centerY + Math.sin(angle) * variedRadius * 0.6;
+
+      if (i === 0) {
+        this.ctx.moveTo(x, y);
+      } else {
+        this.ctx.lineTo(x, y);
+      }
+    }
+
+    this.ctx.closePath();
+
+    // Draw shadow
+    this.ctx.fillStyle = shadowColor;
+    this.ctx.fill();
+
+    // Draw main cloud
+    this.ctx.translate(5, 5); // Adjust shadow offset
+    this.ctx.fillStyle = baseColor;
+    this.ctx.fill();
+
+    this.ctx.restore();
+  }
+
+  drawCirrusCloud(cloud, opacity) {
+    this.ctx.save();
+
+    const centerX = cloud.x;
+    const centerY = cloud.y;
+    const width = cloud.maxSize * 2;
+    const height = cloud.maxSize * 0.4;
+
+    const wisps = cloud.wisps || [
+      { offsetY: 0, curve: 0.2, width: 1 },
+      { offsetY: height * 0.4, curve: -0.15, width: 0.8 },
+      { offsetY: -height * 0.3, curve: 0.1, width: 0.7 }
+    ];
+
+    // Define noise for variation
+    const noise = Math.random() * 0.2;
+
+    wisps.forEach(wisp => {
+      this.ctx.beginPath();
+      const segments = 20;
+
+      for (let i = 0; i <= segments; i++) {
+        const t = i / segments;
+        const x = centerX - width / 2 + (width * t);
+
+        const y = centerY + wisp.offsetY +
+          Math.sin(t * Math.PI) * height * wisp.curve +
+          noise * height * 0.3;
+
+        if (i === 0) {
+          this.ctx.moveTo(x, y);
+        } else {
+          this.ctx.lineTo(x, y);
+        }
+      }
+
+      this.ctx.lineWidth = height * 0.2 * wisp.width;
+      this.ctx.strokeStyle = `rgba(255, 255, 255, ${opacity * 0.7})`;
+      this.ctx.stroke();
+    });
+
+    this.ctx.restore();
+  }
+
+  drawStratusCloud(cloud, opacity) {
+    this.ctx.save();
+
+    const centerX = cloud.x;
+    const centerY = cloud.y;
+    const width = cloud.maxSize * 2.5;
+    const height = cloud.maxSize * 0.6;
+
+    const layers = cloud.layers || [
+      { offsetY: 0, width: 1, opacity: 1 },
+      { offsetY: height * 0.3, width: 0.85, opacity: 0.8 },
+      { offsetY: height * 0.6, width: 0.7, opacity: 0.6 }
+    ];
+
+    // Define noise for variation
+    const noise = Math.random() * 0.2;
+
+    layers.forEach(layer => {
+      const layerWidth = width * layer.width;
+      const layerOpacity = opacity * layer.opacity;
+
+      this.ctx.beginPath();
+      const segments = 20;
+
+      for (let i = 0; i <= segments; i++) {
+        const t = i / segments;
+        const x = centerX - layerWidth / 2 + (layerWidth * t);
+        const y = centerY + layer.offsetY - height * 0.25 + noise * height * 0.2;
+
+        if (i === 0) {
+          this.ctx.moveTo(x, y);
+        } else {
+          this.ctx.lineTo(x, y);
+        }
+      }
+
+      this.ctx.lineTo(centerX + layerWidth / 2, centerY + layer.offsetY + height * 0.25);
+      this.ctx.lineTo(centerX - layerWidth / 2, centerY + layer.offsetY + height * 0.25);
+      this.ctx.closePath();
+
+      const gradient = this.ctx.createLinearGradient(
+        centerX - layerWidth / 2, centerY + layer.offsetY,
+        centerX + layerWidth / 2, centerY + layer.offsetY
+      );
+      gradient.addColorStop(0, `rgba(255, 255, 255, ${layerOpacity * 0.4})`);
+      gradient.addColorStop(0.5, `rgba(255, 255, 255, ${layerOpacity})`);
+      gradient.addColorStop(1, `rgba(255, 255, 255, ${layerOpacity * 0.4})`);
+
+      this.ctx.fillStyle = gradient;
+      this.ctx.fill();
+    });
+
+    this.ctx.restore();
+  }
+
+  roundRect(x, y, width, height, radius, fillStyle) {
+    this.ctx.beginPath();
+    this.ctx.moveTo(x + radius, y);
+    this.ctx.lineTo(x + width - radius, y);
+    this.ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    this.ctx.lineTo(x + width, y + height - radius);
+    this.ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    this.ctx.lineTo(x + radius, y + height);
+    this.ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    this.ctx.lineTo(x, y + radius);
+    this.ctx.quadraticCurveTo(x, y, x + radius, y);
+    this.ctx.closePath();
+    this.ctx.fillStyle = fillStyle;
+    this.ctx.fill();
   }
 
   drawStars() {
@@ -229,50 +507,36 @@ export class Environment {
   }
 
   drawMoonWithPhase(x, y, radius, phase) {
-    // Save the current context state
     this.ctx.save();
 
-    // Draw the base moon (white circle)
     this.ctx.beginPath();
     this.ctx.arc(x, y, radius, 0, Math.PI * 2);
-    this.ctx.fillStyle = "rgb(255, 255, 255)"; // Base white
+    this.ctx.fillStyle = "rgb(255, 255, 255)";
     this.ctx.fill();
 
-    // Handle special cases: New Moon (phase = 0 or 1) and Full Moon (phase = 0.5)
     if (phase === 0 || phase === 1) {
-      // Fully dark for New Moon
       this.ctx.beginPath();
       this.ctx.arc(x, y, radius, 0, Math.PI * 2);
-      this.ctx.fillStyle = "rgba(50, 50, 50, 1)"; // Shadow color
+      this.ctx.fillStyle = "rgba(50, 50, 50, 1)";
       this.ctx.fill();
-    } else if (phase === 0.5) {
-      // Fully illuminated for Full Moon (no shadow needed)
-    } else {
-      // Setup clipping region to only show within the moon circle
+    } else if (phase !== 0.5) {
       this.ctx.beginPath();
       this.ctx.arc(x, y, radius, 0, Math.PI * 2);
       this.ctx.clip();
 
-      // Calculate the shadow offset based on the phase
       let offset;
       if (phase < 0.5) {
-        // Waxing phases (New Moon to Full Moon)
-        // Offset moves from left edge (-radius) to center (0)
         offset = -radius - (2 * (phase - 0.5) * radius);
       } else {
-        // Waning phases (Full Moon to New Moon)
-        // Offset moves from right edge (+radius) to center (0)
         offset = radius - (2 * (phase - 0.5) * radius);
       }
 
-      // Draw the shadow circle
       this.ctx.beginPath();
       this.ctx.arc(x + offset, y, radius, 0, Math.PI * 2);
-      this.ctx.fillStyle = "rgba(50, 50, 50, 0.6)"; // Shadow color
+      this.ctx.fillStyle = "rgba(50, 50, 50, 0.6)";
       this.ctx.fill();
     }
 
-    // Restore the context state
     this.ctx.restore();
   }
 
@@ -285,19 +549,14 @@ export class Environment {
       const { x, y } = this.calculateMoonPosition(moonProgress);
       const moonRadius = 25;
 
-      // Calculate Moon phase (sped up for testing with short cycle)
       const currentDay = Math.floor(this.time / this.cycleDuration);
-      const lunarCycleDays = 28; // Shortened lunar cycle for testing
-      const acceleratedLunarCycle = 28; // Full cycle every 5 days
+      const acceleratedLunarCycle = 28;
       const moonPhaseProgress = (currentDay % acceleratedLunarCycle) / acceleratedLunarCycle;
 
-      // Draw the Moon with phase
       this.drawMoonWithPhase(x, y, moonRadius, moonPhaseProgress);
 
-      // Apply color transition using globalCompositeOperation
       this.ctx.save();
 
-      // Calculate yellowness for the moon color
       let yellowness;
       if (t <= 0.825) {
         yellowness = 1 - (t - 0.7) / 0.125;
@@ -305,12 +564,10 @@ export class Environment {
         yellowness = (t - 0.825) / 0.125;
       }
 
-      // Create moon glow color
       const red = 255;
       const green = 250 + 5 * (1 - yellowness);
       const blue = 230 + 25 * (1 - yellowness);
 
-      // Add glow effect
       this.ctx.shadowBlur = 15;
       this.ctx.shadowColor = "rgba(255, 255, 255, 0.5)";
       this.ctx.beginPath();
@@ -319,7 +576,6 @@ export class Environment {
       this.ctx.fill();
       this.ctx.shadowBlur = 0;
 
-      // Apply subtle color tint
       this.ctx.globalCompositeOperation = "source-atop";
       this.ctx.beginPath();
       this.ctx.arc(x, y, moonRadius, 0, Math.PI * 2);
@@ -331,7 +587,9 @@ export class Environment {
   }
 
   newDay() {
-    this.cloudFreeDays = Math.random() > 0.5;
+    this.cloudFreeDays = 0 //Math.random() > 0.5;
+    console.log('New day:', this.time);
+    console.log(this.cloudFreeDays)
   }
 
   update() {
@@ -345,8 +603,8 @@ export class Environment {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.drawSky();
     this.drawStars();
-    this.drawClouds();
     this.drawSun();
     this.drawMoon();
+    this.drawClouds();
   }
 }

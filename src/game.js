@@ -1,6 +1,6 @@
 // game.js
 
-import { Environment } from './environment.js';
+import { Environment } from 'environment.js';
 
 // Select the canvas and set its dimensions
 const canvas = document.getElementById('gameCanvas');
