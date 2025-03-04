@@ -1,6 +1,6 @@
 // music_manager.js
 class MusicLoader {
-    constructor(musicPath = '../music_assets') {
+    constructor(musicPath = './music_assets') {
         this.musicPath = musicPath;
         this.tracks = [];
         console.log(`MusicLoader initialized with path: ${this.musicPath}`);
@@ -41,7 +41,7 @@ class MusicLoader {
 }
 
 class MusicManager {
-    constructor(musicPath = '../music_assets') {
+    constructor(musicPath = './music_assets') {
         console.log(`MusicManager initialized with path: ${musicPath}`);
         this.musicLoader = new MusicLoader(musicPath);
         this.audioTracks = [];
@@ -49,6 +49,7 @@ class MusicManager {
         this.currentAudio = null;
         this.masterVolume = 0.5; // Default to 50% volume
         this.onTrackChange = null; // Callback for track changes
+        this.isAutoplayBlocked = false;
     }
 
     async initializeMusic() {
@@ -115,11 +116,27 @@ class MusicManager {
         
         this.currentAudio = this.audioTracks[this.currentTrackIndex];
         
+        // Add a user interaction prompt if autoplay is blocked
+        if (this.isAutoplayBlocked) {
+            console.log('Autoplay blocked. Waiting for user interaction.');
+            return this;
+        }
+
         try {
             console.log(`Attempting to play track: ${this.getCurrentTrackName()}`);
             this.currentAudio.play()
-                .then(() => console.log('Track started playing successfully'))
-                .catch((error) => console.error('Error playing track:', error));
+                .then(() => {
+                    console.log('Track started playing successfully');
+                    this.isAutoplayBlocked = false;
+                })
+                .catch((error) => {
+                    console.error('Error playing track:', error);
+                    if (error.name === 'NotAllowedError') {
+                        this.isAutoplayBlocked = true;
+                        // Dispatch a custom event to notify about autoplay blocking
+                        window.dispatchEvent(new Event('musicAutoplayBlocked'));
+                    }
+                });
         } catch (error) {
             console.error('Unexpected error when playing track:', error);
         }
@@ -130,6 +147,21 @@ class MusicManager {
         }
         
         return this;
+    }
+    
+    // Method to start playback after user interaction
+    startPlaybackAfterInteraction() {
+        if (this.isAutoplayBlocked && this.currentAudio) {
+            console.log('Attempting to start playback after user interaction');
+            this.currentAudio.play()
+                .then(() => {
+                    this.isAutoplayBlocked = false;
+                    console.log('Playback started successfully');
+                })
+                .catch((error) => {
+                    console.error('Still unable to start playback:', error);
+                });
+        }
     }
 
     getCurrentTrackName() {

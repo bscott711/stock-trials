@@ -15,23 +15,33 @@ const volumeDownBtn = document.getElementById('volumeDown');
 const volumeUpBtn = document.getElementById('volumeUp');
 const pausePlayBtn = document.getElementById('pausePlay');
 
+const autoplayBlockedNotice = document.createElement('div');
+autoplayBlockedNotice.textContent = 'Click here to start music';
+autoplayBlockedNotice.style.color = 'white';
+autoplayBlockedNotice.style.cursor = 'pointer';
+autoplayBlockedNotice.style.display = 'none';
+autoplayBlockedNotice.style.position = 'absolute';
+autoplayBlockedNotice.style.top = '10px';
+autoplayBlockedNotice.style.left = '10px';
+autoplayBlockedNotice.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+autoplayBlockedNotice.style.padding = '10px';
+autoplayBlockedNotice.style.zIndex = '1000';
+document.body.appendChild(autoplayBlockedNotice);
+console.log('Notice added to DOM:', document.body.contains(autoplayBlockedNotice));
+
+
 // Initialize the music manager
 console.log('Creating MusicManager...');
-const musicManager = new MusicManager('../music_assets');
+const musicManager = new MusicManager('./music_assets');
 
 // Initialize the environment
 const environment = new Environment(canvas);
 
-// Async function to set up game with music
 async function initializeGame() {
     console.log('Initializing game...');
     try {
-        // Initialize music first
+        // Initialize music first (load tracks, but don’t play yet)
         await musicManager.initializeMusic();
-        
-        // Start the music playlist
-        console.log('Starting playlist...');
-        musicManager.startPlaylist();
 
         // Update current track display
         function updateTrackDisplay() {
@@ -40,19 +50,28 @@ async function initializeGame() {
             currentTrackDisplay.textContent = `Now Playing: ${trackName}`;
         }
 
-        // Track change listener
         musicManager.onTrackChange = updateTrackDisplay;
 
-        // Animation loop
-        function animate() {
-            // Update the environment
-            environment.update();
-            
-            // Request the next frame
-            requestAnimationFrame(animate);
+        window.addEventListener('musicAutoplayBlocked', () => {
+            console.log('Autoplay blocked - showing notice');
+            autoplayBlockedNotice.style.display = 'block';
+        });
+
+        autoplayBlockedNotice.addEventListener('click', () => {
+            console.log('Notice clicked - starting playlist');
+            musicManager.startPlaylist();
+            autoplayBlockedNotice.style.display = 'none';
+        });
+
+        if (!musicManager.currentAudio || musicManager.isAutoplayBlocked) {
+            console.log('No music playing yet - showing notice');
+            console.log('Current audio:', musicManager.currentAudio);
+            console.log('Autoplay blocked:', musicManager.isAutoplayBlocked);
+            autoplayBlockedNotice.style.display = 'block';
+            console.log('Notice display set to:', autoplayBlockedNotice.style.display);
         }
 
-        // Music control event listeners
+        // Music control event listeners (unchanged)
         volumeDownBtn.addEventListener('click', () => {
             const currentVolume = musicManager.masterVolume;
             console.log(`Current volume: ${currentVolume}`);
@@ -79,6 +98,11 @@ async function initializeGame() {
             isPaused = !isPaused;
         });
 
+        // Animation loop
+        function animate() {
+            environment.update();
+            requestAnimationFrame(animate);
+        }
         // Start the animation
         animate();
         
