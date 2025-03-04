@@ -1,19 +1,54 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dynamic Sky</title>
-  <style>
-    canvas {
-      display: block;
-      margin: 0 auto;
-      background-color: black;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Sky</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #121212;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            display: block;
+            margin: 10px auto;
+            background-color: black;
+        }
+        #musicControls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .control-btn {
+            background-color: #333;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        .control-btn:hover {
+            background-color: #555;
+        }
+        #currentTrack {
+            color: white;
+            margin-bottom: 10px;
+        }
+    </style>
 </head>
 <body>
-  <canvas id="gameCanvas"></canvas>
-  <script type="module" src="game.js"></script>
+    <div id="currentTrack">Now Playing: Loading...</div>
+    <div id="musicControls">
+        <button class="control-btn" id="volumeDown">🔉 Volume -</button>
+        <button class="control-btn" id="volumeUp">🔊 Volume +</button>
+        <button class="control-btn" id="pausePlay">⏸️ Pause</button>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+    <script type="module" src="game.js"></script>
 </body>
 </html>
