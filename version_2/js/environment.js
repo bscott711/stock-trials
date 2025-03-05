@@ -4,10 +4,99 @@ export class Environment {
     this.ctx = canvas.getContext("2d");
     this.time = 0;
     this.cycleDuration = 120; // One day = 10 seconds
-    this.cloudFreeDays = 0//Math.random() > 0.5;
-    // Initialize clouds and stars
+    this.cloudFreeDays = 0; //Math.random() > 0.5
+    this.PIXELS_PER_DAY = 200; // Define the constant here, matching game.js
+
+    // Synchronous initializations
+    this.path = []; // Initialize path as empty until initializeGround is called
     this.initializeClouds();
     this.initializeStars();
+    // Note: initializeGround is async, so we’ll call it separately
+  }
+
+  // Asynchronous ground initialization (call this separately)
+  async initializeGround() {
+    this.path = [];
+    try {
+      const response = await fetch('https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=AAPL&apikey=98QKC7GE5OJVUCOE');
+      const data = await response.json();
+      if (!data['Time Series (Daily)']) throw new Error('Invalid API response');
+
+      const timeSeries = data['Time Series (Daily)'];
+      const dates = Object.keys(timeSeries).sort();
+      const prices = dates.map(date => parseFloat(timeSeries[date]['4. close']));
+      const minPrice = Math.min(...prices);
+      const maxPrice = Math.max(...prices);
+
+      this.path = prices.map((price, i) => [
+        i * this.PIXELS_PER_DAY,
+        this.canvas.height - ((price - minPrice) / (maxPrice - minPrice)) * 300
+      ]);
+    } catch (error) {
+      console.error('Error fetching stock data:', error);
+      this.generateSamplePath();
+    }
+  }
+
+  generateSamplePath() {
+    this.path = Array.from({ length: 100 }, (_, i) => [
+      i * this.PIXELS_PER_DAY,
+      this.canvas.height - Math.random() * 300
+    ]);
+  }
+
+  getPathY(worldX) {
+    const index = Math.floor(worldX / this.PIXELS_PER_DAY);
+    if (index < 0 || index >= this.path.length - 1 || this.path.length === 0) {
+      return this.canvas.height / 2; // Fallback to mid-screen if path isn’t ready
+    }
+    const [x1, y1] = this.path[index];
+    const [x2, y2] = this.path[index + 1];
+    const t = (worldX - x1) / (x2 - x1);
+    return y1 + t * (y2 - y1);
+  }
+
+  getPathSlope(worldX) {
+    const index = Math.floor(worldX / this.PIXELS_PER_DAY);
+    if (index < 0 || index >= this.path.length - 1 || this.path.length === 0) {
+      return 0; // Flat slope if path isn’t ready
+    }
+    const [x1, y1] = this.path[index];
+    const [x2, y2] = this.path[index + 1];
+    return (y2 - y1) / (x2 - x1);
+  }
+
+  drawGround(bikeX) {
+    if (this.path.length === 0) return; // Don’t draw if path isn’t initialized
+
+    const startX = bikeX - this.canvas.width / 2;
+    const endX = bikeX + this.canvas.width / 2;
+    const startIndex = Math.max(0, Math.floor(startX / this.PIXELS_PER_DAY));
+    const endIndex = Math.min(this.path.length - 1, Math.ceil(endX / this.PIXELS_PER_DAY));
+
+    // Draw grass below the path
+    this.ctx.beginPath();
+    this.ctx.moveTo(0, this.canvas.height);
+    for (let i = startIndex; i <= endIndex; i++) {
+      const [wx, wy] = this.path[i];
+      this.ctx.lineTo(wx - startX, wy);
+    }
+    this.ctx.lineTo(this.canvas.width, this.canvas.height);
+    this.ctx.closePath();
+    this.ctx.fillStyle = '#32CD32'; // Green grass
+    this.ctx.fill();
+
+    // Draw path (ground line)
+    this.ctx.beginPath();
+    for (let i = startIndex; i < endIndex; i++) {
+      const [wx1, wy1] = this.path[i];
+      const [wx2, wy2] = this.path[i + 1];
+      this.ctx.moveTo(wx1 - startX, wy1);
+      this.ctx.lineTo(wx2 - startX, wy2);
+    }
+    this.ctx.strokeStyle = 'black';
+    this.ctx.lineWidth = 2;
+    this.ctx.stroke();
   }
 
   initializeStars() {
@@ -29,24 +118,17 @@ export class Environment {
     this.clouds = [];
     const numClouds = 10;
 
-    // Define cloud types and their weights
     const cloudTypes = ['cumulus', 'cirrus', 'stratus'];
-    const weights = [0.4, 0.3, 0.3]; // Cumulus has a higher weight (60% chance)
+    const weights = [0.4, 0.3, 0.3];
 
-    // Function to perform weighted random selection
     function getWeightedRandomCloudType(cloudTypes, weights) {
       const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
       const random = Math.random() * totalWeight;
       let cumulativeWeight = 0;
-
       for (let i = 0; i < weights.length; i++) {
         cumulativeWeight += weights[i];
-        if (random < cumulativeWeight) {
-          return cloudTypes[i];
-        }
+        if (random < cumulativeWeight) return cloudTypes[i];
       }
-
-      // Fallback (should never reach here)
       return cloudTypes[cloudTypes.length - 1];
     }
 
@@ -57,18 +139,14 @@ export class Environment {
         maxSize: Math.random() * 50 + 20,
         speed: Math.random() * 0.5 + 0.2,
         opacity: Math.random() * 0.3 + 0.4,
-        type: getWeightedRandomCloudType(cloudTypes, weights) // Use weighted random selection
+        type: getWeightedRandomCloudType(cloudTypes, weights)
       };
 
-      // Add type-specific properties
       const cloud = this.addCloudTypeProperties(cloudBase);
-
-      // Validate the cloud object
       if (!this.validateCloud(cloud)) {
         console.warn('Invalid cloud object:', cloud);
         continue;
       }
-
       this.clouds.push(cloud);
     }
   }
@@ -76,47 +154,16 @@ export class Environment {
   addCloudTypeProperties(cloud) {
     switch (cloud.type) {
       case 'cumulus':
-        // Adjust vertical position to account for the larger size
         cloud.y += this.canvas.height / 16;
-
-        // Define 3 overlapping elliptical puffs with rotation angles
         cloud.puffs = [
-          {
-            offsetX: -cloud.maxSize * 0.2,
-            offsetY: -cloud.maxSize * 0.15,
-            radiusX: cloud.maxSize * 0.8,
-            radiusY: cloud.maxSize * 0.5,
-            rotation: Math.random() * 0.2 - 0.1 // Small random rotation (-0.1 to 0.1 radians)
-          }, // Large puff (top-left)
-          {
-            offsetX: cloud.maxSize * 0.1,
-            offsetY: -cloud.maxSize * 0.1,
-            radiusX: cloud.maxSize * 0.7,
-            radiusY: cloud.maxSize * 0.4,
-            rotation: Math.random() * 0.2 - 0.1 // Small random rotation (-0.1 to 0.1 radians)
-          }, // Medium puff (center)
-          {
-            offsetX: cloud.maxSize * 0.3,
-            offsetY: cloud.maxSize * 0.1,
-            radiusX: cloud.maxSize * 0.6,
-            radiusY: cloud.maxSize * 0.35,
-            rotation: Math.random() * 0.2 - 0.1 // Small random rotation (-0.1 to 0.1 radians)
-          }  // Small puff (bottom-right)
+          { offsetX: -cloud.maxSize * 0.2, offsetY: -cloud.maxSize * 0.15, radiusX: cloud.maxSize * 0.8, radiusY: cloud.maxSize * 0.5, rotation: Math.random() * 0.2 - 0.1 },
+          { offsetX: cloud.maxSize * 0.1, offsetY: -cloud.maxSize * 0.1, radiusX: cloud.maxSize * 0.7, radiusY: cloud.maxSize * 0.4, rotation: Math.random() * 0.2 - 0.1 },
+          { offsetX: cloud.maxSize * 0.3, offsetY: cloud.maxSize * 0.1, radiusX: cloud.maxSize * 0.6, radiusY: cloud.maxSize * 0.35, rotation: Math.random() * 0.2 - 0.1 }
         ];
-
-        // Adjust opacity and speed for larger clouds
         cloud.opacity *= 0.9;
-        cloud.speed *= 0.8; // Reduce speed slightly for larger clouds
-
-        // Define shadow properties with scaled values
-        cloud.shadow = {
-          offsetX: cloud.maxSize * 0.15, // Scaled offset
-          offsetY: cloud.maxSize * 0.15, // Scaled offset
-          blur: cloud.maxSize * 0.15, // Scaled blur
-          opacity: 0.3
-        };
+        cloud.speed *= 0.8;
+        cloud.shadow = { offsetX: cloud.maxSize * 0.15, offsetY: cloud.maxSize * 0.15, blur: cloud.maxSize * 0.15, opacity: 0.3 };
         break;
-
       case 'cirrus':
         cloud.y -= this.canvas.height / 8;
         cloud.wisps = [
@@ -127,7 +174,6 @@ export class Environment {
         cloud.opacity *= 0.8;
         cloud.speed *= 0.7;
         break;
-
       case 'stratus':
         cloud.y += this.canvas.height / 12;
         cloud.layers = [
@@ -137,16 +183,13 @@ export class Environment {
         ];
         cloud.speed *= 0.8;
         break;
-
       default:
         console.warn(`Unknown cloud type: ${cloud.type}`);
-        break;
     }
     return cloud;
   }
 
   validateCloud(cloud) {
-    // Ensure all required properties are present
     const requiredProperties = ['x', 'y', 'maxSize', 'speed', 'opacity', 'type'];
     return requiredProperties.every(prop => cloud.hasOwnProperty(prop));
   }
@@ -168,55 +211,22 @@ export class Environment {
     const nightColor = { r: 20, g: 20, b: 60 };
 
     let skyColor;
-    if (t >= 0.9 && t < 0.95) {
-      skyColor = this.lerpColor(nightColor, predawnColor, (t - 0.9) * 20);
-    } else if (t >= 0.95 || t < 0.05) {
+    if (t >= 0.9 && t < 0.95) skyColor = this.lerpColor(nightColor, predawnColor, (t - 0.9) * 20);
+    else if (t >= 0.95 || t < 0.05) {
       const normalizedT = t >= 0.95 ? (t - 0.95) * 10 : (t + 0.05) * 10;
       skyColor = this.lerpColor(predawnColor, sunriseColor, normalizedT);
-    } else if (t >= 0.05 && t < 0.4) {
-      skyColor = this.lerpColor(sunriseColor, dayColor, (t - 0.05) * (1 / 0.35));
-    } else if (t >= 0.4 && t < 0.7) {
-      skyColor = this.lerpColor(dayColor, sunsetColor, (t - 0.4) * (1 / 0.3));
-    } else {
-      skyColor = this.lerpColor(sunsetColor, nightColor, (t - 0.7) * (1 / 0.2));
-    }
+    } else if (t >= 0.05 && t < 0.4) skyColor = this.lerpColor(sunriseColor, dayColor, (t - 0.05) / 0.35);
+    else if (t >= 0.4 && t < 0.7) skyColor = this.lerpColor(dayColor, sunsetColor, (t - 0.4) / 0.3);
+    else skyColor = this.lerpColor(sunsetColor, nightColor, (t - 0.7) / 0.2);
 
     const darkHorizon = { r: 10, g: 10, b: 30 };
     const lightHorizonFactor = { r: -40, g: -20, b: -20 };
     let horizonColor;
-    if (t < 0.3) {
-      horizonColor = darkHorizon;
-    } else if (t >= 0.3 && t < 0.5) {
-      const lerpT = (t - 0.3) * 5;
-      horizonColor = this.lerpColor(
-        darkHorizon,
-        {
-          r: Math.max(skyColor.r + lightHorizonFactor.r, 0),
-          g: Math.max(skyColor.g + lightHorizonFactor.g, 0),
-          b: Math.max(skyColor.b + lightHorizonFactor.b, 0),
-        },
-        lerpT
-      );
-    } else if (t >= 0.5 && t < 0.7) {
-      horizonColor = {
-        r: Math.max(skyColor.r + lightHorizonFactor.r, 0),
-        g: Math.max(skyColor.g + lightHorizonFactor.g, 0),
-        b: Math.max(skyColor.b + lightHorizonFactor.b, 0),
-      };
-    } else if (t >= 0.7 && t < 0.9) {
-      const lerpT = (t - 0.7) * 5;
-      horizonColor = this.lerpColor(
-        {
-          r: Math.max(skyColor.r + lightHorizonFactor.r, 0),
-          g: Math.max(skyColor.g + lightHorizonFactor.g, 0),
-          b: Math.max(skyColor.b + lightHorizonFactor.b, 0),
-        },
-        darkHorizon,
-        lerpT
-      );
-    } else {
-      horizonColor = darkHorizon;
-    }
+    if (t < 0.3) horizonColor = darkHorizon;
+    else if (t >= 0.3 && t < 0.5) horizonColor = this.lerpColor(darkHorizon, { r: Math.max(skyColor.r + lightHorizonFactor.r, 0), g: Math.max(skyColor.g + lightHorizonFactor.g, 0), b: Math.max(skyColor.b + lightHorizonFactor.b, 0) }, (t - 0.3) * 5);
+    else if (t >= 0.5 && t < 0.7) horizonColor = { r: Math.max(skyColor.r + lightHorizonFactor.r, 0), g: Math.max(skyColor.g + lightHorizonFactor.g, 0), b: Math.max(skyColor.b + lightHorizonFactor.b, 0) };
+    else if (t >= 0.7 && t < 0.9) horizonColor = this.lerpColor({ r: Math.max(skyColor.r + lightHorizonFactor.r, 0), g: Math.max(skyColor.g + lightHorizonFactor.g, 0), b: Math.max(skyColor.b + lightHorizonFactor.b, 0) }, darkHorizon, (t - 0.7) * 5);
+    else horizonColor = darkHorizon;
 
     const gradient = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height);
     gradient.addColorStop(0, `rgb(${skyColor.r}, ${skyColor.g}, ${skyColor.b})`);
@@ -234,24 +244,16 @@ export class Environment {
     const cloudVisibility = 1 - Math.min(1, Math.abs(t - cloudPeak) / cloudRange);
 
     if (cloudVisibility > 0) {
-      this.clouds.forEach((cloud) => {
+      this.clouds.forEach(cloud => {
         cloud.x -= cloud.speed;
         if (cloud.x + cloud.maxSize < 0) cloud.x = this.canvas.width + cloud.maxSize;
 
         const opacity = cloudVisibility * cloud.opacity;
-
         switch (cloud.type) {
-          case 'cumulus':
-            this.drawCumulusCloud(cloud, opacity);
-            break;
-          case 'cirrus':
-            this.drawCirrusCloud(cloud, opacity);
-            break;
-          case 'stratus':
-            this.drawStratusCloud(cloud, opacity);
-            break;
-          default:
-            this.drawCumulusCloud(cloud, opacity);
+          case 'cumulus': this.drawCumulusCloud(cloud, opacity); break;
+          case 'cirrus': this.drawCirrusCloud(cloud, opacity); break;
+          case 'stratus': this.drawStratusCloud(cloud, opacity); break;
+          default: this.drawCumulusCloud(cloud, opacity);
         }
       });
     }
@@ -259,161 +261,73 @@ export class Environment {
 
   drawCumulusCloud(cloud, opacity) {
     this.ctx.save();
+    const centerX = cloud.x, centerY = cloud.y, maxSize = cloud.maxSize;
+    if (!cloud.noiseOffset) cloud.noiseOffset = Math.random() * 0.2;
+    const baseColor = `rgba(255, 255, 255, ${opacity})`, shadowColor = `rgba(220, 220, 240, ${opacity * 0.7})`;
 
-    const centerX = cloud.x;
-    const centerY = cloud.y;
-    const maxSize = cloud.maxSize;
-
-    // Ensure each cloud has a consistent noise offset
-    if (!cloud.noiseOffset) {
-      cloud.noiseOffset = Math.random() * 0.2; // Assign a fixed noise offset once
-    }
-
-    const baseColor = `rgba(255, 255, 255, ${opacity})`;
-    const shadowColor = `rgba(220, 220, 240, ${opacity * 0.7})`;
-
-    // Use the precomputed noise offset for this cloud
-    const noise = cloud.noiseOffset;
-
-    // Draw shadow
     this.ctx.beginPath();
-    this.ctx.ellipse(
-      centerX + cloud.shadow.offsetX,
-      centerY + cloud.shadow.offsetY,
-      maxSize * 0.5,
-      maxSize * 0.3,
-      0, // No rotation for the shadow
-      0,
-      Math.PI * 2
-    );
+    this.ctx.ellipse(centerX + cloud.shadow.offsetX, centerY + cloud.shadow.offsetY, maxSize * 0.5, maxSize * 0.3, 0, 0, Math.PI * 2);
     this.ctx.fillStyle = shadowColor;
     this.ctx.fill();
 
-    // Draw puffs
     cloud.puffs.forEach(puff => {
       this.ctx.beginPath();
-      this.ctx.ellipse(
-        centerX + puff.offsetX,
-        centerY + puff.offsetY,
-        puff.radiusX,
-        puff.radiusY,
-        puff.rotation, // Apply rotation angle
-        0, // Start angle
-        Math.PI * 2 // End angle
-      );
+      this.ctx.ellipse(centerX + puff.offsetX, centerY + puff.offsetY, puff.radiusX, puff.radiusY, puff.rotation, 0, Math.PI * 2);
       this.ctx.fillStyle = baseColor;
       this.ctx.fill();
     });
-
     this.ctx.restore();
   }
 
   drawCirrusCloud(cloud, opacity) {
     this.ctx.save();
-
-    const centerX = cloud.x;
-    const centerY = cloud.y;
-    const width = cloud.maxSize * 2;
-    const height = cloud.maxSize * 0.4;
-
-    const wisps = cloud.wisps || [
-      { offsetY: 0, curve: 0.2, width: 1 },
-      { offsetY: height * 0.4, curve: -0.15, width: 0.8 },
-      { offsetY: -height * 0.3, curve: 0.1, width: 0.7 }
-    ];
-
-    // Ensure each cloud has a consistent noise offset
-    if (!cloud.noiseOffset) {
-      cloud.noiseOffset = Math.random() * 0.2; // Assign a fixed noise offset once
-    }
-
-    // Use the precomputed noise offset for this cloud
+    const centerX = cloud.x, centerY = cloud.y, width = cloud.maxSize * 2, height = cloud.maxSize * 0.4;
+    if (!cloud.noiseOffset) cloud.noiseOffset = Math.random() * 0.2;
     const noise = cloud.noiseOffset;
 
-    wisps.forEach(wisp => {
+    cloud.wisps.forEach(wisp => {
       this.ctx.beginPath();
       const segments = 20;
-
       for (let i = 0; i <= segments; i++) {
         const t = i / segments;
         const x = centerX - width / 2 + (width * t);
-
-        const y = centerY + wisp.offsetY +
-          Math.sin(t * Math.PI) * height * wisp.curve +
-          noise * height * 0.3;
-
-        if (i === 0) {
-          this.ctx.moveTo(x, y);
-        } else {
-          this.ctx.lineTo(x, y);
-        }
+        const y = centerY + wisp.offsetY + Math.sin(t * Math.PI) * height * wisp.curve + noise * height * 0.3;
+        i === 0 ? this.ctx.moveTo(x, y) : this.ctx.lineTo(x, y);
       }
-
       this.ctx.lineWidth = height * 0.2 * wisp.width;
       this.ctx.strokeStyle = `rgba(255, 255, 255, ${opacity * 0.7})`;
       this.ctx.stroke();
     });
-
     this.ctx.restore();
   }
 
   drawStratusCloud(cloud, opacity) {
     this.ctx.save();
-
-    const centerX = cloud.x;
-    const centerY = cloud.y;
-    const width = cloud.maxSize * 2.5;
-    const height = cloud.maxSize * 0.6;
-
-    const layers = cloud.layers || [
-      { offsetY: 0, width: 1, opacity: 1 },
-      { offsetY: height * 0.3, width: 0.85, opacity: 0.8 },
-      { offsetY: height * 0.6, width: 0.7, opacity: 0.6 }
-    ];
-
-    // Ensure each cloud has a consistent noise offset
-    if (!cloud.noiseOffset) {
-      cloud.noiseOffset = Math.random() * 0.05; // Assign a fixed noise offset once
-    }
-
-    // Use the precomputed noise offset for this cloud
+    const centerX = cloud.x, centerY = cloud.y, width = cloud.maxSize * 2.5, height = cloud.maxSize * 0.6;
+    if (!cloud.noiseOffset) cloud.noiseOffset = Math.random() * 0.05;
     const noise = cloud.noiseOffset;
 
-    layers.forEach(layer => {
-      const layerWidth = width * layer.width;
-      const layerOpacity = opacity * layer.opacity;
-
+    cloud.layers.forEach(layer => {
+      const layerWidth = width * layer.width, layerOpacity = opacity * layer.opacity;
       this.ctx.beginPath();
       const segments = 20;
-
       for (let i = 0; i <= segments; i++) {
         const t = i / segments;
         const x = centerX - layerWidth / 2 + (layerWidth * t);
         const y = centerY + layer.offsetY - height * 0.25 + noise * height * 0.2;
-
-        if (i === 0) {
-          this.ctx.moveTo(x, y);
-        } else {
-          this.ctx.lineTo(x, y);
-        }
+        i === 0 ? this.ctx.moveTo(x, y) : this.ctx.lineTo(x, y);
       }
-
       this.ctx.lineTo(centerX + layerWidth / 2, centerY + layer.offsetY + height * 0.25);
       this.ctx.lineTo(centerX - layerWidth / 2, centerY + layer.offsetY + height * 0.25);
       this.ctx.closePath();
 
-      const gradient = this.ctx.createLinearGradient(
-        centerX - layerWidth / 2, centerY + layer.offsetY,
-        centerX + layerWidth / 2, centerY + layer.offsetY
-      );
+      const gradient = this.ctx.createLinearGradient(centerX - layerWidth / 2, centerY + layer.offsetY, centerX + layerWidth / 2, centerY + layer.offsetY);
       gradient.addColorStop(0, `rgba(255, 255, 255, ${layerOpacity * 0.4})`);
       gradient.addColorStop(0.5, `rgba(255, 255, 255, ${layerOpacity})`);
       gradient.addColorStop(1, `rgba(255, 255, 255, ${layerOpacity * 0.4})`);
-
       this.ctx.fillStyle = gradient;
       this.ctx.fill();
     });
-
     this.ctx.restore();
   }
 
@@ -435,21 +349,11 @@ export class Environment {
 
   drawStars() {
     const t = (this.time % this.cycleDuration) / this.cycleDuration;
-    let starVisibility = 0;
-    if (t >= 0.7 && t < 0.75) {
-      starVisibility = (t - 0.7) / 0.05;
-    } else if (t >= 0.75 && t < 0.95) {
-      starVisibility = 1.0;
-    } else if (t >= 0.95) {
-      starVisibility = 1.0 - (t - 0.95) / 0.05;
-      starVisibility = Math.max(0, starVisibility);
-    }
+    let starVisibility = t >= 0.7 && t < 0.75 ? (t - 0.7) / 0.05 : t >= 0.75 && t < 0.95 ? 1.0 : t >= 0.95 ? Math.max(0, 1.0 - (t - 0.95) / 0.05) : 0;
 
     if (starVisibility > 0) {
-      this.stars.forEach((star) => {
-        if (star.twinkle && Math.random() > 0.95) {
-          star.radius = Math.random() * 1.5 + 0.5;
-        }
+      this.stars.forEach(star => {
+        if (star.twinkle && Math.random() > 0.95) star.radius = Math.random() * 1.5 + 0.5;
         const opacity = starVisibility * star.opacity;
         this.ctx.beginPath();
         this.ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
@@ -463,8 +367,8 @@ export class Environment {
     const x = this.canvas.width * progress;
     const h = this.canvas.width / 2;
     const k = 0.1 * this.canvas.height;
-    const a = (this.canvas.height - k) / Math.pow(h, 2);
-    const y = a * Math.pow(x - h, 2) + k;
+    const a = (this.canvas.height - k) / (h * h);
+    const y = a * (x - h) * (x - h) + k;
     return { x, y };
   }
 
@@ -472,71 +376,51 @@ export class Environment {
     const x = this.canvas.width * progress;
     const h = this.canvas.width / 2;
     const k = 0.4 * this.canvas.height;
-    const a = (this.canvas.height - k) / Math.pow(h, 2);
-    const y = a * Math.pow(x - h, 2) + k;
+    const a = (this.canvas.height - k) / (h * h);
+    const y = a * (x - h) * (x - h) + k;
     return { x, y };
   }
 
   drawSun() {
     const t = (this.time % this.cycleDuration) / this.cycleDuration;
-    const sunVisible = t >= 0.95 || t < 0.75;
+    if (!(t >= 0.95 || t < 0.75)) return;
 
-    if (sunVisible) {
-      let sunProgress;
-      const sunriseT = 0.95;
-      const sunsetT = 0.75;
-      const sunDuration = (1 - sunriseT) + sunsetT;
+    let sunProgress = t >= 0.95 ? ((t - 0.95) / 0.05) * 0.25 : (t + 0.25) / 1;
+    const { x, y } = this.calculateSunPosition(sunProgress);
 
-      if (t >= 0.95) {
-        sunProgress = (t - 0.95) / (1 - 0.95);
-        sunProgress *= (1 - sunriseT) / sunDuration;
-      } else {
-        sunProgress = (t + (1 - sunriseT)) / sunDuration;
-      }
-
-      const { x, y } = this.calculateSunPosition(sunProgress);
-      const orangeR = 255,
-        orangeG = 160,
-        orangeB = 60;
-      const yellowR = 255,
-        yellowG = 255,
-        yellowB = 0;
-
-      let r, g, b;
-      if (t >= 0.95 || t < 0.05) {
-        const dawnT = t >= 0.95 ? (t - 0.95) / 0.1 : (t + 0.05) / 0.1;
-        r = orangeR;
-        g = orangeG + (yellowG - orangeG) * dawnT;
-        b = orangeB + (yellowB - orangeB) * dawnT;
-      } else if (t >= 0.65 && t < 0.75) {
-        const duskT = (t - 0.65) / 0.1;
-        r = yellowR;
-        g = yellowG - (yellowG - orangeG) * duskT;
-        b = yellowB - (yellowB - orangeB) * duskT;
-      } else {
-        r = yellowR;
-        g = yellowG;
-        b = yellowB;
-      }
-
-      const sunColor = `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
-      const sunRadius = 30;
-
-      this.ctx.beginPath();
-      this.ctx.arc(x, y, sunRadius, 0, Math.PI * 2);
-      this.ctx.fillStyle = sunColor;
-      this.ctx.fill();
-
-      this.ctx.shadowBlur = 20;
-      this.ctx.shadowColor = `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b / 2)}, 0.5)`;
-      this.ctx.fill();
-      this.ctx.shadowBlur = 0;
+    const orangeR = 255, orangeG = 160, orangeB = 60;
+    const yellowR = 255, yellowG = 255, yellowB = 0;
+    let r, g, b;
+    if (t >= 0.95 || t < 0.05) {
+      const dawnT = t >= 0.95 ? (t - 0.95) / 0.1 : (t + 0.05) / 0.1;
+      r = orangeR;
+      g = orangeG + (yellowG - orangeG) * dawnT;
+      b = orangeB + (yellowB - orangeB) * dawnT;
+    } else if (t >= 0.65 && t < 0.75) {
+      const duskT = (t - 0.65) / 0.1;
+      r = yellowR;
+      g = yellowG - (yellowG - orangeG) * duskT;
+      b = yellowB - (yellowB - orangeB) * duskT;
+    } else {
+      r = yellowR; g = yellowG; b = yellowB;
     }
+
+    const sunColor = `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
+    const sunRadius = 30;
+
+    this.ctx.beginPath();
+    this.ctx.arc(x, y, sunRadius, 0, Math.PI * 2);
+    this.ctx.fillStyle = sunColor;
+    this.ctx.fill();
+
+    this.ctx.shadowBlur = 20;
+    this.ctx.shadowColor = `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b / 2)}, 0.5)`;
+    this.ctx.fill();
+    this.ctx.shadowBlur = 0;
   }
 
   drawMoonWithPhase(x, y, radius, phase) {
     this.ctx.save();
-
     this.ctx.beginPath();
     this.ctx.arc(x, y, radius, 0, Math.PI * 2);
     this.ctx.fillStyle = "rgb(255, 255, 255)";
@@ -551,74 +435,54 @@ export class Environment {
       this.ctx.beginPath();
       this.ctx.arc(x, y, radius, 0, Math.PI * 2);
       this.ctx.clip();
-
-      let offset;
-      if (phase < 0.5) {
-        offset = -radius - (2 * (phase - 0.5) * radius);
-      } else {
-        offset = radius - (2 * (phase - 0.5) * radius);
-      }
-
+      const offset = phase < 0.5 ? -radius - (2 * (phase - 0.5) * radius) : radius - (2 * (phase - 0.5) * radius);
       this.ctx.beginPath();
       this.ctx.arc(x + offset, y, radius, 0, Math.PI * 2);
       this.ctx.fillStyle = "rgba(50, 50, 50, 0.6)";
       this.ctx.fill();
     }
-
     this.ctx.restore();
   }
 
   drawMoon() {
     const t = (this.time % this.cycleDuration) / this.cycleDuration;
-    const moonVisible = t >= 0.7 && t < 0.95;
+    if (!(t >= 0.7 && t < 0.95)) return;
 
-    if (moonVisible) {
-      const moonProgress = (t - 0.7) / 0.25;
-      const { x, y } = this.calculateMoonPosition(moonProgress);
-      const moonRadius = 25;
+    const moonProgress = (t - 0.7) / 0.25;
+    const { x, y } = this.calculateMoonPosition(moonProgress);
+    const moonRadius = 25;
 
-      const currentDay = Math.floor(this.time / this.cycleDuration);
-      const acceleratedLunarCycle = 28;
-      const moonPhaseProgress = (currentDay % acceleratedLunarCycle) / acceleratedLunarCycle;
+    const currentDay = Math.floor(this.time / this.cycleDuration);
+    const acceleratedLunarCycle = 28;
+    const moonPhaseProgress = (currentDay % acceleratedLunarCycle) / acceleratedLunarCycle;
 
-      this.drawMoonWithPhase(x, y, moonRadius, moonPhaseProgress);
+    this.drawMoonWithPhase(x, y, moonRadius, moonPhaseProgress);
 
-      this.ctx.save();
+    this.ctx.save();
+    const yellowness = t <= 0.825 ? 1 - (t - 0.7) / 0.125 : (t - 0.825) / 0.125;
+    const red = 255, green = 250 + 5 * (1 - yellowness), blue = 230 + 25 * (1 - yellowness);
 
-      let yellowness;
-      if (t <= 0.825) {
-        yellowness = 1 - (t - 0.7) / 0.125;
-      } else {
-        yellowness = (t - 0.825) / 0.125;
-      }
+    this.ctx.shadowBlur = 15;
+    this.ctx.shadowColor = "rgba(255, 255, 255, 0.5)";
+    this.ctx.beginPath();
+    this.ctx.arc(x, y, moonRadius, 0, Math.PI * 2);
+    this.ctx.fillStyle = "transparent";
+    this.ctx.fill();
+    this.ctx.shadowBlur = 0;
 
-      const red = 255;
-      const green = 250 + 5 * (1 - yellowness);
-      const blue = 230 + 25 * (1 - yellowness);
-
-      this.ctx.shadowBlur = 15;
-      this.ctx.shadowColor = "rgba(255, 255, 255, 0.5)";
-      this.ctx.beginPath();
-      this.ctx.arc(x, y, moonRadius, 0, Math.PI * 2);
-      this.ctx.fillStyle = "transparent";
-      this.ctx.fill();
-      this.ctx.shadowBlur = 0;
-
-      this.ctx.globalCompositeOperation = "source-atop";
-      this.ctx.beginPath();
-      this.ctx.arc(x, y, moonRadius, 0, Math.PI * 2);
-      this.ctx.fillStyle = `rgba(${red}, ${Math.round(green)}, ${Math.round(blue)}, 0.2)`;
-      this.ctx.fill();
-
-      this.ctx.restore();
-    }
+    this.ctx.globalCompositeOperation = "source-atop";
+    this.ctx.beginPath();
+    this.ctx.arc(x, y, moonRadius, 0, Math.PI * 2);
+    this.ctx.fillStyle = `rgba(${red}, ${Math.round(green)}, ${Math.round(blue)}, 0.2)`;
+    this.ctx.fill();
+    this.ctx.restore();
   }
 
   newDay() {
-    this.cloudFreeDays = 0 //Math.random() > 0.5;
+    this.cloudFreeDays = 0; //Math.random() > 0.5
   }
 
-  update() {
+  update(bikeX = 0) {
     const previousTime = this.time;
     this.time += 0.01;
 
@@ -632,5 +496,6 @@ export class Environment {
     this.drawMoon();
     this.drawClouds();
     this.drawStars();
+    this.drawGround(bikeX);
   }
 }

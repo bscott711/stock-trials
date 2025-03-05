@@ -9,16 +9,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     canvas.height = window.innerHeight;
 
     // Game constants
-    const CANVAS_WIDTH = canvas.width;
-    const CANVAS_HEIGHT = canvas.height;
-    const offsetX = CANVAS_WIDTH / 2;
     const BIKE_SPEED = 200; // px/s
     const GRAVITY = 500; // px/s²
     const JUMP_VELOCITY = 200; // px/s upward
-    const PIXELS_PER_DAY = 200;
+    const CRASH_THRESHOLD = Math.PI / 4; // 45 degrees
 
     // Game state
-    let path = [];
     let bike = {
         x: 0,
         y: 0,
@@ -30,57 +26,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         jumpStartAngle: 0
     };
     let score = 0;
+    let flipBonus = 0;
     let gameOver = false;
     let lastTime = 0;
 
-    // Fetch stock data for terrain generation
-    async function fetchStockData() {
-        try {
-            const response = await fetch('https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=AAPL&apikey=98QKC7GE5OJVUCOE');
-            const data = await response.json();
-            if (!data['Time Series (Daily)']) throw new Error('Invalid API response');
+    // Wait for vibes to be fully initialized
+    await vibes.ready;
+    console.log('After vibes.ready, environment:', vibes.environment); // Debug log
 
-            const timeSeries = data['Time Series (Daily)'];
-            const dates = Object.keys(timeSeries).sort();
-            const prices = dates.map(date => parseFloat(timeSeries[date]['4. close']));
-            const minPrice = Math.min(...prices);
-            const maxPrice = Math.max(...prices);
-
-            path = prices.map((price, i) => [
-                i * PIXELS_PER_DAY,
-                canvas.height - ((price - minPrice) / (maxPrice - minPrice)) * 300
-            ]);
-        } catch (error) {
-            console.error('Error fetching stock data:', error);
-            generateSamplePath();
-        }
-    }
-
-    function generateSamplePath() {
-        path = Array.from({ length: 100 }, (_, i) => [
-            i * PIXELS_PER_DAY,
-            canvas.height - Math.random() * 300
-        ]);
-    }
-
-    // Interpolate path y-value at world_x
-    function getPathY(worldX) {
-        const index = Math.floor(worldX / PIXELS_PER_DAY);
-        if (index < 0 || index >= path.length - 1) return path[0][1];
-        const [x1, y1] = path[index];
-        const [x2, y2] = path[index + 1];
-        const t = (worldX - x1) / (x2 - x1);
-        return y1 + t * (y2 - y1);
-    }
-
-    // Get slope at world_x
-    function getPathSlope(worldX) {
-        const index = Math.floor(worldX / PIXELS_PER_DAY);
-        if (index < 0 || index >= path.length - 1) return 0;
-        const [x1, y1] = path[index];
-        const [x2, y2] = path[index + 1];
-        return (y2 - y1) / (x2 - x1);
-    }
+    // Set initial bike position after vibes is ready
+    bike.y = vibes.environment.getPathY(0); // Line 37, where the error occurs
+    bike.angle = Math.atan(vibes.environment.getPathSlope(0));
 
     // Game loop
     function gameLoop(timestamp) {
@@ -97,11 +53,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Render everything
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Use vibes.js to update the environment and music
-        vibes.time = bike.x / PIXELS_PER_DAY;
-        vibes.update();
+        // Update environment with bike's position
+        vibes.time = bike.x / vibes.environment.PIXELS_PER_DAY; // Assuming environment exposes PIXELS_PER_DAY
+        vibes.update(bike.x); // Pass bike.x to update ground
 
-        renderTerrain();
         renderBike();
         renderHUD();
 
@@ -109,17 +64,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function updateScore() {
-        score = Math.floor(bike.x / PIXELS_PER_DAY) * 100;
+        score = Math.floor(bike.x / vibes.environment.PIXELS_PER_DAY) * 100 + flipBonus;
     }
 
     function updateBike(deltaTime) {
         if (gameOver) return;
-        // Bike physics and controls
         bike.x += BIKE_SPEED * deltaTime;
 
         if (bike.state === 'on_ground') {
-            bike.y = getPathY(bike.x);
-            bike.angle = Math.atan(getPathSlope(bike.x));
+            bike.y = vibes.environment.getPathY(bike.x);
+            bike.angle = Math.atan(vibes.environment.getPathSlope(bike.x));
         } else {
             // In air
             bike.v_y += GRAVITY * deltaTime;
@@ -128,10 +82,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             bike.totalRotation += bike.rotationSpeed * deltaTime;
 
             // Check for landing
-            const pathY = getPathY(bike.x);
+            const pathY = vibes.environment.getPathY(bike.x);
             if (bike.y >= pathY) {
                 bike.y = pathY;
-                const pathAngle = Math.atan(getPathSlope(bike.x));
+                const pathAngle = Math.atan(vibes.environment.getPathSlope(bike.x));
                 const angleDiff = Math.abs(bike.angle - pathAngle);
                 if (angleDiff > CRASH_THRESHOLD) {
                     gameOver = true;
@@ -143,38 +97,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             }
         }
-    }
-
-    function renderTerrain() {
-        // Draw terrain (below the path)
-        const startX = bike.x - CANVAS_WIDTH / 2;
-        const endX = bike.x + CANVAS_WIDTH / 2;
-        const startIndex = Math.max(0, Math.floor(startX / PIXELS_PER_DAY));
-        const endIndex = Math.min(path.length - 1, Math.ceil(endX / PIXELS_PER_DAY));
-
-        // Grass option
-        ctx.beginPath();
-        ctx.moveTo(0, CANVAS_HEIGHT); // Bottom-left corner
-        for (let i = startIndex; i <= endIndex; i++) {
-            const [wx, wy] = path[i];
-            ctx.lineTo(wx + offsetX, wy);
-        }
-        ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT); // Bottom-right corner
-        ctx.closePath();
-        ctx.fillStyle = '#32CD32'; // Green grass
-        ctx.fill();
-
-        // Draw path (ground line)
-        ctx.beginPath();
-        for (let i = startIndex; i < endIndex; i++) {
-            const [wx1, wy1] = path[i];
-            const [wx2, wy2] = path[i + 1];
-            ctx.moveTo(wx1 + offsetX, wy1);
-            ctx.lineTo(wx2 + offsetX, wy2);
-        }
-        ctx.strokeStyle = 'black';
-        ctx.lineWidth = 2; // Thicker line for clarity
-        ctx.stroke();
     }
 
     function renderBike() {
@@ -214,9 +136,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         bike.rotationSpeed = (event.gamma / 90) * 2 * Math.PI;
     });
 
-    // Initialize game
-    await fetchStockData();
-    bike.y = getPathY(0);
-    bike.angle = Math.atan(getPathSlope(0));
+    // Start the game loop
     requestAnimationFrame(gameLoop);
 });
