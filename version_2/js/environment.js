@@ -3,7 +3,7 @@ export class Environment {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d");
     this.time = 0;
-    this.cycleDuration = 10; // One day = 10 seconds
+    this.cycleDuration = 120; // One day = 10 seconds
     this.cloudFreeDays = 0//Math.random() > 0.5;
     // Initialize clouds and stars
     this.initializeClouds();
@@ -11,6 +11,7 @@ export class Environment {
   }
 
   initializeStars() {
+    console.log('Canvas dimensions in initializeStars:', this.canvas.width, this.canvas.height);
     this.stars = [];
     const numStars = 100;
     for (let i = 0; i < numStars; i++) {
