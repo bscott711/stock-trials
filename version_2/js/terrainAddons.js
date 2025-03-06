@@ -3,40 +3,162 @@ export class Rock {
     constructor(x, y, size) {
         this.x = x;
         this.y = y;
-        this.size = size;
-        this.color = '#808080';
+        this.size = size * (Math.random() * 0.5 + 0.75); // Randomize size (75-125% of base size)
+        this.baseColor = this.generateBaseColor();
+        this.mossColor = this.generateMossColor();
+        this.shapePoints = this.generateShapePoints();
+        this.gradient = this.generateGradient();
+        this.mossPatches = this.generateMossPatches();
+    }
+
+    generateBaseColor() {
+        const hue = Math.floor(Math.random() * 10 + 175); // Grayish-blue hue: 175-185
+        const saturation = Math.floor(Math.random() * 10 + 10); // Low saturation: 10-20%
+        const lightness = Math.floor(Math.random() * 20 + 70); // Lighter lightness: 70-90%
+        return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+    }
+
+    generateMossColor() {
+        const hue = Math.floor(Math.random() * 40 + 80); // Greenish hue: 80-120
+        const saturation = Math.floor(Math.random() * 30 + 50); // Moderate saturation: 50-80%
+        const lightness = Math.floor(Math.random() * 20 + 40); // Medium lightness: 40-60%
+        return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+    }
+
+    generateShapePoints() {
+        const numPoints = Math.floor(Math.random() * 4) + 6; // 6-9 points for irregular shape
+        const points = [];
+        const angleStep = (Math.PI * 2) / numPoints;
+
+        for (let i = 0; i < numPoints; i++) {
+            const angle = angleStep * i;
+            const radius = this.size * (Math.random() * 0.3 + 0.85); // Randomize radius (85-115%)
+            const x = Math.cos(angle) * radius;
+            const y = Math.sin(angle) * radius;
+            points.push({ x, y });
+        }
+
+        return points;
+    }
+
+    generateGradient() {
+        const lightColor = this.shadeColor(this.baseColor, 20); // Brighter center: +20%
+        const darkColor = this.shadeColor(this.baseColor, -5); // Less dark edges: -5%
+        return { light: lightColor, dark: darkColor };
+    }
+
+    generateMossPatches() {
+        const mossPatches = [];
+        const patchCount = Math.floor(Math.random() * 3) + 1; // 1-3 moss patches per rock
+
+        for (let i = 0; i < patchCount; i++) {
+            const patchSize = this.size * (Math.random() * 0.3 + 0.1); // 10-40% of rock size
+            const angle = Math.random() * Math.PI * 2; // Random angle around the rock
+            const distance = this.size * (Math.random() * 0.5 + 0.5); // Distance from center
+            const patchX = Math.cos(angle) * distance;
+            const patchY = Math.sin(angle) * distance;
+
+            mossPatches.push({
+                x: patchX,
+                y: patchY,
+                size: patchSize
+            });
+        }
+
+        return mossPatches;
     }
 
     draw(ctx, startX) {
         const screenX = this.x - startX;
+
+        // Draw the rock with an irregular shape
         ctx.beginPath();
-        ctx.arc(screenX, this.y, this.size, 0, Math.PI * 2);
-        ctx.fillStyle = this.color;
+        ctx.moveTo(screenX + this.shapePoints[0].x, this.y + this.shapePoints[0].y);
+
+        this.shapePoints.forEach(point => {
+            ctx.lineTo(screenX + point.x, this.y + point.y);
+        });
+
+        ctx.closePath();
+
+        // Apply gradient for texture
+        const gradient = ctx.createRadialGradient(
+            screenX, this.y, 0,              // Center
+            screenX, this.y, this.size       // Edge
+        );
+        gradient.addColorStop(0, this.gradient.light);    // Center: bright
+        gradient.addColorStop(0.6, this.baseColor);       // Mid: base color
+        gradient.addColorStop(1, this.gradient.dark);     // Edge: slightly darker
+
+        ctx.fillStyle = gradient;
         ctx.fill();
+
+        // Draw precomputed moss patches
+        this.mossPatches.forEach(patch => {
+            ctx.beginPath();
+            ctx.arc(screenX + patch.x, this.y + patch.y, patch.size, 0, Math.PI * 2);
+            ctx.fillStyle = this.mossColor;
+            ctx.fill();
+        });
+    }
+
+    shadeColor(color, percent) {
+        let num = parseInt(color.slice(1), 16);
+        let amt = Math.round(2.55 * percent);
+        let R = (num >> 16) + amt;
+        let G = (num >> 8 & 0x00FF) + amt;
+        let B = (num & 0x0000FF) + amt;
+        return `#${(0x1000000 + (R < 255 ? R < 1 ? 0 : R : 255)
+            * 0x10000 + (G < 255 ? G < 1 ? 0 : G : 255)
+            * 0x100 + (B < 255 ? B < 1 ? 0 : B : 255))
+            .toString(16)
+            .slice(1)}`;
     }
 }
 
 export class Tree {
     constructor(x, y, height) {
-        this.x = x;
-        this.y = y;
-        this.height = height;
-        this.trunkWidth = height / 5;
-        this.trunkColor = '#8B4513';
-        this.foliageColor = '#228B22';
+        this.x = x; // X position of the tree
+        this.y = y; // Base Y position (ground level)
+        this.height = height * (Math.random() * 0.5 + 1.2); // Randomize height (120-170% of base height)
+        this.trunkWidth = this.height / 4.5; // Adjusted trunk width for proportionality
+        this.trunkHeight = this.height / 2.5; // Trunk takes up ~40% of the total height
+        this.trunkColor = this.generateTrunkColor();
+        this.foliageColor = this.generateFoliageColor();
+        this.foliageWidth = this.height * (Math.random() * 0.3 + 0.9); // Randomized foliage width (90-120% of height)
+    }
+
+    generateTrunkColor() {
+        const hue = Math.floor(Math.random() * 10 + 25); // Brownish hue: 25-35
+        const saturation = Math.floor(Math.random() * 20 + 60); // Moderate saturation: 60-80%
+        const lightness = Math.floor(Math.random() * 10 + 30); // Medium lightness: 30-40%
+        return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+    }
+
+    generateFoliageColor() {
+        const hue = Math.floor(Math.random() * 20 + 100); // Greenish hue: 100-120
+        const saturation = Math.floor(Math.random() * 20 + 50); // Moderate saturation: 50-70%
+        const lightness = Math.floor(Math.random() * 10 + 40); // Medium lightness: 40-50%
+        return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
     }
 
     draw(ctx, startX) {
         const screenX = this.x - startX;
-        const trunkHeight = this.height / 2;
-        
+
+        // Draw trunk
         ctx.fillStyle = this.trunkColor;
-        ctx.fillRect(screenX - this.trunkWidth / 2, this.y - trunkHeight, this.trunkWidth, trunkHeight);
-        
+        ctx.fillRect(
+            screenX - this.trunkWidth / 2,
+            this.y - this.trunkHeight,
+            this.trunkWidth,
+            this.trunkHeight
+        );
+
+        // Draw foliage (triangle shape)
         ctx.beginPath();
-        ctx.moveTo(screenX, this.y - this.height);
-        ctx.lineTo(screenX - this.trunkWidth * 1.5, this.y - trunkHeight);
-        ctx.lineTo(screenX + this.trunkWidth * 1.5, this.y - trunkHeight);
+        ctx.moveTo(screenX, this.y - this.height); // Top point
+        ctx.lineTo(screenX - this.foliageWidth / 2, this.y - this.trunkHeight); // Bottom-left point
+        ctx.lineTo(screenX + this.foliageWidth / 2, this.y - this.trunkHeight); // Bottom-right point
         ctx.closePath();
         ctx.fillStyle = this.foliageColor;
         ctx.fill();
@@ -44,71 +166,270 @@ export class Tree {
 }
 
 export class Mountain {
-    constructor(x, baseY, width, height) {
+    constructor(x, baseY, isBackground = false) {
         this.x = x;
         this.baseY = baseY;
-        this.width = width;
-        this.height = height;
-        this.color = '#696969';
+        this.width = Math.random() * 1000 + 200;
+        this.height = Math.random() * 400 + 100;
+        this.isBackground = isBackground;
+        this.peaks = this.generatePeaks();
+        this.baseColor = this.generateBaseColor(isBackground);
+        this.snowColor = this.generateSnowColor();
+        this.roughness = Math.random() * 0.3 + 0.1;
+        this.curveControlPoints = this.precomputeCurveControlPoints();
+    }
+
+    generateBaseColor(isBackground) {
+        const shade = isBackground
+            ? Math.floor(Math.random() * 40 + 70)
+            : Math.floor(Math.random() * 60 + 40);
+        return `hsl(200, 20%, ${shade}%)`;
+    }
+
+    generateSnowColor() {
+        const blueTint = Math.random() * 0.1;
+        return `hsl(210, 50%, ${95 - blueTint * 100}%)`;
+    }
+
+    generatePeaks() {
+        const peakCount = Math.floor(this.width / 150) + 1;
+        const segmentWidth = this.width / peakCount;
+        const peaks = [];
+        let prevX = this.x - this.width / 2;
+
+        for (let i = 0; i < peakCount; i++) {
+            const baseX = prevX + segmentWidth * (Math.random() * 0.5 + 0.75);
+            const offsetX = (Math.random() - 0.5) * segmentWidth * 0.3;
+            const peakX = Math.max(this.x - this.width / 2, Math.min(this.x + this.width / 2, baseX + offsetX));
+            const peakHeight = this.height * (Math.random() * 0.7 + 0.3);
+            peaks.push({ x: peakX, height: peakHeight });
+            prevX = peakX - segmentWidth * 0.5;
+        }
+
+        const maxPeak = Math.max(...peaks.map(p => p.height));
+        peaks.forEach(peak => {
+            peak.height = (peak.height / maxPeak) * this.height * 0.9 + this.height * 0.1;
+        });
+
+        return peaks;
+    }
+
+    precomputeCurveControlPoints() {
+        const controlPoints = [];
+        let prevPeak = { x: this.x - this.width / 2, y: this.baseY };
+
+        this.peaks.forEach(peak => {
+            const midX = (prevPeak.x + peak.x) / 2;
+            const midY = (prevPeak.y + (this.baseY - peak.height)) / 2;
+            const controlOffset = (Math.random() - 0.5) * this.height * this.roughness;
+
+            controlPoints.push({
+                midX: midX,
+                midY: midY + controlOffset
+            });
+
+            prevPeak = { x: peak.x, y: this.baseY - peak.height };
+        });
+
+        return controlPoints;
     }
 
     draw(ctx, startX) {
         const screenX = this.x - startX;
+        const leftX = screenX - this.width / 2;
+        const rightX = screenX + this.width / 2;
+
+        const gradient = ctx.createLinearGradient(leftX, this.baseY - this.height, leftX, this.baseY);
+        gradient.addColorStop(0, this.snowColor);
+        gradient.addColorStop(0.7, this.shadeColor(this.baseColor, 20));
+        gradient.addColorStop(1, this.baseColor);
+
         ctx.beginPath();
-        ctx.moveTo(screenX - this.width / 2, this.baseY);
-        ctx.lineTo(screenX, this.baseY - this.height);
-        ctx.lineTo(screenX + this.width / 2, this.baseY);
+        ctx.moveTo(leftX, this.baseY);
+
+        let prevPeak = { x: leftX, y: this.baseY };
+        this.peaks.forEach((peak, index) => {
+            const peakScreenX = peak.x - startX;
+            const peakY = this.baseY - peak.height;
+
+            const controlPoint = this.curveControlPoints[index];
+            const midX = controlPoint.midX - startX;
+            const midY = controlPoint.midY;
+
+            ctx.quadraticCurveTo(midX, midY, peakScreenX, peakY);
+            prevPeak = { x: peakScreenX, y: peakY };
+        });
+
+        ctx.lineTo(rightX, this.baseY);
         ctx.closePath();
-        ctx.fillStyle = this.color;
+        ctx.fillStyle = gradient;
         ctx.fill();
-    }
-}
 
-export class Forest {
-    constructor(x, y, width, treeCount) {
-        this.x = x;
-        this.y = y;
-        this.width = width;
-        this.treeCount = treeCount;
-        this.trees = [];
-        this.generateTrees();
+        this.peaks.forEach(peak => {
+            const peakScreenX = peak.x - startX;
+            const snowHeight = peak.height * (Math.random() * 0.3 + 0.5);
+
+            ctx.beginPath();
+            ctx.moveTo(peakScreenX - snowHeight, this.baseY - snowHeight);
+
+            const snowGradient = ctx.createRadialGradient(
+                peakScreenX, this.baseY - peak.height, 0,
+                peakScreenX, this.baseY - peak.height, snowHeight * 2
+            );
+            snowGradient.addColorStop(0, this.snowColor);
+            snowGradient.addColorStop(1, this.shadeColor(this.snowColor, -30));
+
+            ctx.bezierCurveTo(
+                peakScreenX - snowHeight / 2, this.baseY - snowHeight,
+                peakScreenX + snowHeight / 2, this.baseY - snowHeight,
+                peakScreenX + snowHeight, this.baseY - snowHeight
+            );
+            ctx.fillStyle = snowGradient;
+            ctx.fill();
+        });
     }
 
-    generateTrees() {
-        for (let i = 0; i < this.treeCount; i++) {
-            const treeX = this.x + Math.random() * this.width;
-            const height = Math.random() * 30 + 20;
-            this.trees.push(new Tree(treeX, this.y, height));
-        }
-    }
-
-    draw(ctx, startX) {
-        const screenLeft = this.x - startX;
-        const screenRight = screenLeft + this.width;
-        if (screenRight >= 0 && screenLeft <= ctx.canvas.width) {
-            this.trees.forEach(tree => tree.draw(ctx, startX));
-        }
+    shadeColor(color, percent) {
+        let num = parseInt(color.slice(1), 16);
+        let amt = Math.round(2.55 * percent);
+        let R = (num >> 16) + amt;
+        let G = (num >> 8 & 0x00FF) + amt;
+        let B = (num & 0x0000FF) + amt;
+        return `#${(0x1000000 + (R < 255 ? R < 1 ? 0 : R : 255)
+            * 0x10000 + (G < 255 ? G < 1 ? 0 : G : 255)
+            * 0x100 + (B < 255 ? B < 1 ? 0 : B : 255))
+            .toString(16)
+            .slice(1)}`;
     }
 }
 
 export class Beach {
     constructor(x, y, width) {
-        this.x = x;
-        this.y = y;
-        this.width = width;
-        this.sandColor = '#F4A460';
-        this.waterColor = '#4682B4';
+        this.x = x; // Starting x position of the beach
+        this.y = y; // Base y position (ground level)
+        this.width = width; // Width of the beach segment
+        this.sandColor = this.generateSandColor();
+        this.waterColor = this.generateWaterColor();
+        this.wavePoints = this.generateWavePoints();
+        this.sandGradient = this.generateSandGradient();
+        this.waterGradient = this.generateWaterGradient();
+    }
+
+    generateSandColor() {
+        const hue = Math.floor(Math.random() * 10 + 30); // Yellowish hue: 30-40
+        const saturation = Math.floor(Math.random() * 20 + 60); // Moderate saturation: 60-80%
+        const lightness = Math.floor(Math.random() * 10 + 75); // Brighter lightness: 75-85%
+        return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+    }
+
+    generateWaterColor() {
+        const hue = Math.floor(Math.random() * 20 + 200); // Bluish hue: 200-220
+        const saturation = Math.floor(Math.random() * 20 + 60); // Higher saturation: 60-80%
+        const lightness = Math.floor(Math.random() * 10 + 55); // Slightly brighter: 55-65%
+        return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+    }
+
+    generateWavePoints() {
+        const numPoints = Math.floor(this.width / 20); // One point every ~20px
+        const points = [];
+        const waveHeight = 10; // Max wave height
+
+        for (let i = 0; i < numPoints; i++) {
+            const x = (this.width / numPoints) * i;
+            const y = this.y + (Math.random() - 0.5) * waveHeight; // Randomize wave shape
+            points.push({ x, y });
+        }
+
+        return points;
+    }
+
+    generateSandGradient() {
+        const gradient = {};
+        gradient.light = this.shadeColor(this.sandColor, 10); // Lighter shade: +10%
+        gradient.dark = this.shadeColor(this.sandColor, -5); // Slightly darker: -5%
+        return gradient;
+    }
+
+    generateWaterGradient() {
+        const gradient = {};
+        gradient.light = this.shadeColor(this.waterColor, 15); // Lighter shade: +15%
+        gradient.dark = this.shadeColor(this.waterColor, -5); // Slightly darker: -5%
+        return gradient;
     }
 
     draw(ctx, startX) {
         const screenX = this.x - startX;
-        const waterHeight = 50;
+        const sandHeight = 25; // Reduced from 50 to split beach evenly
+        const waterHeight = 25;
 
-        ctx.fillStyle = this.sandColor;
-        ctx.fillRect(screenX, this.y, this.width, waterHeight / 2);
+        // Draw sand with gradient
+        ctx.beginPath();
+        ctx.moveTo(screenX, this.y);
+        this.wavePoints.forEach(point => {
+            const adjustedX = screenX + point.x;
+            ctx.lineTo(adjustedX, point.y);
+        });
+        ctx.lineTo(screenX + this.width, this.y); // Close at base
+        ctx.closePath();
 
-        ctx.fillStyle = this.waterColor;
-        ctx.fillRect(screenX, this.y + waterHeight / 2, this.width, waterHeight);
+        const sandGradient = ctx.createLinearGradient(
+            screenX, this.y,              // Top (shoreline)
+            screenX, this.y + sandHeight  // Bottom of sand
+        );
+        sandGradient.addColorStop(0, this.sandGradient.light);
+        sandGradient.addColorStop(0.6, this.sandColor); // Base color dominates
+        sandGradient.addColorStop(1, this.sandGradient.dark);
+
+        ctx.fillStyle = sandGradient;
+        ctx.fill();
+
+        // Draw water with gradient
+        ctx.beginPath();
+        ctx.moveTo(screenX, this.y + sandHeight + waterHeight); // Bottom of water
+        this.wavePoints.forEach(point => {
+            const adjustedX = screenX + point.x;
+            ctx.lineTo(adjustedX, point.y);
+        });
+        ctx.lineTo(screenX + this.width, this.y + sandHeight + waterHeight); // Close at bottom
+        ctx.closePath();
+
+        const waterGradient = ctx.createLinearGradient(
+            screenX, this.y + sandHeight,             // Top (wave line)
+            screenX, this.y + sandHeight + waterHeight // Bottom of water
+        );
+        waterGradient.addColorStop(0, this.waterGradient.light);
+        waterGradient.addColorStop(0.6, this.waterColor); // Base color dominates
+        waterGradient.addColorStop(1, this.waterGradient.dark);
+
+        ctx.fillStyle = waterGradient;
+        ctx.fill();
+
+        // Draw foam on waves
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.5)"; // Semi-transparent white
+        ctx.lineWidth = 1;
+
+        ctx.beginPath();
+        this.wavePoints.forEach((point, index) => {
+            if (index % 2 === 0) { // Draw foam on every other point
+                const adjustedX = screenX + point.x;
+                ctx.moveTo(adjustedX, point.y);
+                ctx.lineTo(adjustedX, point.y - 3); // Short vertical lines for foam
+            }
+        });
+        ctx.stroke();
+    }
+
+    shadeColor(color, percent) {
+        let num = parseInt(color.slice(1), 16);
+        let amt = Math.round(2.55 * percent);
+        let R = (num >> 16) + amt;
+        let G = (num >> 8 & 0x00FF) + amt;
+        let B = (num & 0x0000FF) + amt;
+        return `#${(0x1000000 + (R < 255 ? R < 1 ? 0 : R : 255)
+            * 0x10000 + (G < 255 ? G < 1 ? 0 : G : 255)
+            * 0x100 + (B < 255 ? B < 1 ? 0 : B : 255))
+            .toString(16)
+            .slice(1)}`;
     }
 }
 
@@ -118,10 +439,8 @@ export class TerrainAddons {
         this.rocks = [];
         this.trees = [];
         this.mountains = [];
-        this.forests = [];
         this.beaches = [];
         this.PIXELS_PER_DAY = 200;
-        // Don’t call initializeAddons here; we’ll call it later
     }
 
     initializeAddons() {
@@ -143,22 +462,24 @@ export class TerrainAddons {
             this.trees.push(new Tree(worldX, y, height));
         }
 
+        for (let i = 0; i < 3; i++) {
+            const forestX = Math.random() * (terrainLength - 1000);
+            const forestWidth = Math.random() * 500 + 300;
+            const treeCount = Math.floor(Math.random() * 10) + 5;
+            for (let j = 0; j < treeCount; j++) {
+                const treeX = forestX + Math.random() * forestWidth;
+                const y = this.getPathY(treeX);
+                const height = Math.random() * 30 + 20;
+                this.trees.push(new Tree(treeX, y, height));
+            }
+        }
+
         this.mountains = [];
         for (let i = 0; i < 5; i++) {
             const worldX = Math.random() * terrainLength;
             const baseY = this.getPathY(worldX);
-            const width = Math.random() * 300 + 200;
-            const height = Math.random() * 150 + 100;
-            this.mountains.push(new Mountain(worldX, baseY, width, height));
-        }
-
-        this.forests = [];
-        for (let i = 0; i < 3; i++) {
-            const worldX = Math.random() * (terrainLength - 1000);
-            const y = this.getPathY(worldX);
-            const width = Math.random() * 500 + 300;
-            const treeCount = Math.floor(Math.random() * 10) + 5;
-            this.forests.push(new Forest(worldX, y, width, treeCount));
+            const isBackground = i < 2;
+            this.mountains.push(new Mountain(worldX, baseY, isBackground));
         }
 
         this.beaches = [];
@@ -174,7 +495,7 @@ export class TerrainAddons {
         const startX = bikeX - ctx.canvas.width / 2;
         const endX = bikeX + ctx.canvas.width / 2;
 
-        this.mountains.forEach(mountain => {
+        this.mountains.filter(m => m.isBackground).forEach(mountain => {
             if (mountain.x - mountain.width / 2 <= endX && mountain.x + mountain.width / 2 >= startX) {
                 mountain.draw(ctx, startX);
             }
@@ -186,7 +507,11 @@ export class TerrainAddons {
             }
         });
 
-        this.forests.forEach(forest => forest.draw(ctx, startX));
+        this.mountains.filter(m => !m.isBackground).forEach(mountain => {
+            if (mountain.x - mountain.width / 2 <= endX && mountain.x + mountain.width / 2 >= startX) {
+                mountain.draw(ctx, startX);
+            }
+        });
 
         this.trees.forEach(tree => {
             if (tree.x >= startX && tree.x <= endX) {

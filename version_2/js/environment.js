@@ -1,4 +1,4 @@
-import { Rock, Tree, TerrainAddons } from './terrainAddons.js';
+import { TerrainAddons } from './terrainAddons.js';
 export class Environment {
   constructor(canvas) {
     this.canvas = canvas;
@@ -7,7 +7,8 @@ export class Environment {
     this.cycleDuration = 120; // One day = 10 seconds
     this.cloudFreeDays = 0; //Math.random() > 0.5
     this.PIXELS_PER_DAY = 200; // Define the constant here, matching game.js
-    
+    this.moonPhaseOffset = Math.floor(Math.random() * 28); // Random offset: 0-27 days
+
     // Synchronous initializations
     this.path = []; // Initialize path as empty until initializeGround is called
     this.initializeClouds();
@@ -460,7 +461,7 @@ export class Environment {
 
     const currentDay = Math.floor(this.time / this.cycleDuration);
     const acceleratedLunarCycle = 28;
-    const moonPhaseProgress = (currentDay % acceleratedLunarCycle) / acceleratedLunarCycle;
+    const moonPhaseProgress = ((currentDay + this.moonPhaseOffset) % acceleratedLunarCycle) / acceleratedLunarCycle;
 
     this.drawMoonWithPhase(x, y, moonRadius, moonPhaseProgress);
 
@@ -501,7 +502,7 @@ export class Environment {
     this.drawSun();
     this.drawMoon();
     this.drawClouds();
-    this.addons.draw(this.ctx, bikeX); // Add rocks and trees after ground
+    this.addons.draw(this.ctx, bikeX); // Add rocks, trees, mountain, beach after ground
     this.drawStars();
     this.drawGround(bikeX);
         
