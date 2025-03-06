@@ -3,7 +3,7 @@ export class Rock {
     constructor(x, y, size) {
         this.x = x;
         this.y = y;
-        this.size = size * (Math.random() * 0.5 + 0.75); // Randomize size (75-125% of base size)
+        this.size = size * (Math.random() * 0.5 + 0.75);
         this.baseColor = this.generateBaseColor();
         this.mossColor = this.generateMossColor();
         this.shapePoints = this.generateShapePoints();
@@ -12,27 +12,27 @@ export class Rock {
     }
 
     generateBaseColor() {
-        const hue = Math.floor(Math.random() * 10 + 175); // Grayish-blue hue: 175-185
-        const saturation = Math.floor(Math.random() * 10 + 10); // Low saturation: 10-20%
-        const lightness = Math.floor(Math.random() * 20 + 70); // Lighter lightness: 70-90%
+        const hue = Math.floor(Math.random() * 10 + 175);
+        const saturation = Math.floor(Math.random() * 10 + 10);
+        const lightness = Math.floor(Math.random() * 20 + 70);
         return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
     }
 
     generateMossColor() {
-        const hue = Math.floor(Math.random() * 40 + 80); // Greenish hue: 80-120
-        const saturation = Math.floor(Math.random() * 30 + 50); // Moderate saturation: 50-80%
-        const lightness = Math.floor(Math.random() * 20 + 40); // Medium lightness: 40-60%
+        const hue = Math.floor(Math.random() * 40 + 80);
+        const saturation = Math.floor(Math.random() * 30 + 50);
+        const lightness = Math.floor(Math.random() * 20 + 40);
         return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
     }
 
     generateShapePoints() {
-        const numPoints = Math.floor(Math.random() * 4) + 6; // 6-9 points for irregular shape
+        const numPoints = Math.floor(Math.random() * 4) + 6;
         const points = [];
         const angleStep = (Math.PI * 2) / numPoints;
 
         for (let i = 0; i < numPoints; i++) {
             const angle = angleStep * i;
-            const radius = this.size * (Math.random() * 0.3 + 0.85); // Randomize radius (85-115%)
+            const radius = this.size * (Math.random() * 0.3 + 0.85);
             const x = Math.cos(angle) * radius;
             const y = Math.sin(angle) * radius;
             points.push({ x, y });
@@ -42,19 +42,19 @@ export class Rock {
     }
 
     generateGradient() {
-        const lightColor = this.shadeColor(this.baseColor, 20); // Brighter center: +20%
-        const darkColor = this.shadeColor(this.baseColor, -5); // Less dark edges: -5%
+        const lightColor = this.shadeColor(this.baseColor, 20);
+        const darkColor = this.shadeColor(this.baseColor, -5);
         return { light: lightColor, dark: darkColor };
     }
 
     generateMossPatches() {
         const mossPatches = [];
-        const patchCount = Math.floor(Math.random() * 3) + 1; // 1-3 moss patches per rock
+        const patchCount = Math.floor(Math.random() * 3) + 1;
 
         for (let i = 0; i < patchCount; i++) {
-            const patchSize = this.size * (Math.random() * 0.3 + 0.1); // 10-40% of rock size
-            const angle = Math.random() * Math.PI * 2; // Random angle around the rock
-            const distance = this.size * (Math.random() * 0.5 + 0.5); // Distance from center
+            const patchSize = this.size * (Math.random() * 0.3 + 0.1);
+            const angle = Math.random() * Math.PI * 2;
+            const distance = this.size * (Math.random() * 0.5 + 0.5);
             const patchX = Math.cos(angle) * distance;
             const patchY = Math.sin(angle) * distance;
 
@@ -71,7 +71,6 @@ export class Rock {
     draw(ctx, startX) {
         const screenX = this.x - startX;
 
-        // Draw the rock with an irregular shape
         ctx.beginPath();
         ctx.moveTo(screenX + this.shapePoints[0].x, this.y + this.shapePoints[0].y);
 
@@ -81,19 +80,14 @@ export class Rock {
 
         ctx.closePath();
 
-        // Apply gradient for texture
-        const gradient = ctx.createRadialGradient(
-            screenX, this.y, 0,              // Center
-            screenX, this.y, this.size       // Edge
-        );
-        gradient.addColorStop(0, this.gradient.light);    // Center: bright
-        gradient.addColorStop(0.6, this.baseColor);       // Mid: base color
-        gradient.addColorStop(1, this.gradient.dark);     // Edge: slightly darker
+        const gradient = ctx.createRadialGradient(screenX, this.y, 0, screenX, this.y, this.size);
+        gradient.addColorStop(0, this.gradient.light);
+        gradient.addColorStop(0.6, this.baseColor);
+        gradient.addColorStop(1, this.gradient.dark);
 
         ctx.fillStyle = gradient;
         ctx.fill();
 
-        // Draw precomputed moss patches
         this.mossPatches.forEach(patch => {
             ctx.beginPath();
             ctx.arc(screenX + patch.x, this.y + patch.y, patch.size, 0, Math.PI * 2);
@@ -118,34 +112,33 @@ export class Rock {
 
 export class Tree {
     constructor(x, y, height) {
-        this.x = x; // X position of the tree
-        this.y = y; // Base Y position (ground level)
-        this.height = height * (Math.random() * 0.5 + 1.2); // Randomize height (120-170% of base height)
-        this.trunkWidth = this.height / 4.5; // Adjusted trunk width for proportionality
-        this.trunkHeight = this.height / 2.5; // Trunk takes up ~40% of the total height
+        this.x = x;
+        this.y = y;
+        this.height = height * (Math.random() * 0.5 + 1.2);
+        this.trunkWidth = this.height / 4.5;
+        this.trunkHeight = this.height / 2.5;
         this.trunkColor = this.generateTrunkColor();
         this.foliageColor = this.generateFoliageColor();
-        this.foliageWidth = this.height * (Math.random() * 0.3 + 0.9); // Randomized foliage width (90-120% of height)
+        this.foliageWidth = this.height * (Math.random() * 0.3 + 0.9);
     }
 
     generateTrunkColor() {
-        const hue = Math.floor(Math.random() * 10 + 25); // Brownish hue: 25-35
-        const saturation = Math.floor(Math.random() * 20 + 60); // Moderate saturation: 60-80%
-        const lightness = Math.floor(Math.random() * 10 + 30); // Medium lightness: 30-40%
+        const hue = Math.floor(Math.random() * 10 + 25);
+        const saturation = Math.floor(Math.random() * 20 + 60);
+        const lightness = Math.floor(Math.random() * 10 + 30);
         return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
     }
 
     generateFoliageColor() {
-        const hue = Math.floor(Math.random() * 20 + 100); // Greenish hue: 100-120
-        const saturation = Math.floor(Math.random() * 20 + 50); // Moderate saturation: 50-70%
-        const lightness = Math.floor(Math.random() * 10 + 40); // Medium lightness: 40-50%
+        const hue = Math.floor(Math.random() * 20 + 100);
+        const saturation = Math.floor(Math.random() * 20 + 50);
+        const lightness = Math.floor(Math.random() * 10 + 40);
         return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
     }
 
     draw(ctx, startX) {
         const screenX = this.x - startX;
 
-        // Draw trunk
         ctx.fillStyle = this.trunkColor;
         ctx.fillRect(
             screenX - this.trunkWidth / 2,
@@ -154,11 +147,10 @@ export class Tree {
             this.trunkHeight
         );
 
-        // Draw foliage (triangle shape)
         ctx.beginPath();
-        ctx.moveTo(screenX, this.y - this.height); // Top point
-        ctx.lineTo(screenX - this.foliageWidth / 2, this.y - this.trunkHeight); // Bottom-left point
-        ctx.lineTo(screenX + this.foliageWidth / 2, this.y - this.trunkHeight); // Bottom-right point
+        ctx.moveTo(screenX, this.y - this.height);
+        ctx.lineTo(screenX - this.foliageWidth / 2, this.y - this.trunkHeight);
+        ctx.lineTo(screenX + this.foliageWidth / 2, this.y - this.trunkHeight);
         ctx.closePath();
         ctx.fillStyle = this.foliageColor;
         ctx.fill();
@@ -180,7 +172,7 @@ export class Mountain {
     }
 
     generateBaseColor(isBackground) {
-        const shade = isBackground
+        const shade = isBackground 
             ? Math.floor(Math.random() * 40 + 70)
             : Math.floor(Math.random() * 60 + 40);
         return `hsl(200, 20%, ${shade}%)`;
@@ -305,9 +297,9 @@ export class Mountain {
 
 export class Beach {
     constructor(x, y, width) {
-        this.x = x; // Starting x position of the beach
-        this.y = y; // Base y position (ground level)
-        this.width = width; // Width of the beach segment
+        this.x = x;
+        this.y = y;
+        this.width = width;
         this.sandColor = this.generateSandColor();
         this.waterColor = this.generateWaterColor();
         this.wavePoints = this.generateWavePoints();
@@ -316,27 +308,27 @@ export class Beach {
     }
 
     generateSandColor() {
-        const hue = Math.floor(Math.random() * 10 + 30); // Yellowish hue: 30-40
-        const saturation = Math.floor(Math.random() * 20 + 60); // Moderate saturation: 60-80%
-        const lightness = Math.floor(Math.random() * 10 + 75); // Brighter lightness: 75-85%
+        const hue = Math.floor(Math.random() * 10 + 30);
+        const saturation = Math.floor(Math.random() * 20 + 60);
+        const lightness = Math.floor(Math.random() * 10 + 75);
         return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
     }
 
     generateWaterColor() {
-        const hue = Math.floor(Math.random() * 20 + 200); // Bluish hue: 200-220
-        const saturation = Math.floor(Math.random() * 20 + 60); // Higher saturation: 60-80%
-        const lightness = Math.floor(Math.random() * 10 + 55); // Slightly brighter: 55-65%
+        const hue = Math.floor(Math.random() * 20 + 200);
+        const saturation = Math.floor(Math.random() * 20 + 60);
+        const lightness = Math.floor(Math.random() * 10 + 55);
         return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
     }
 
     generateWavePoints() {
-        const numPoints = Math.floor(this.width / 20); // One point every ~20px
+        const numPoints = Math.floor(this.width / 20);
         const points = [];
-        const waveHeight = 10; // Max wave height
+        const waveHeight = 10;
 
         for (let i = 0; i < numPoints; i++) {
             const x = (this.width / numPoints) * i;
-            const y = this.y + (Math.random() - 0.5) * waveHeight; // Randomize wave shape
+            const y = this.y + (Math.random() - 0.5) * waveHeight;
             points.push({ x, y });
         }
 
@@ -345,75 +337,66 @@ export class Beach {
 
     generateSandGradient() {
         const gradient = {};
-        gradient.light = this.shadeColor(this.sandColor, 10); // Lighter shade: +10%
-        gradient.dark = this.shadeColor(this.sandColor, -5); // Slightly darker: -5%
+        gradient.light = this.shadeColor(this.sandColor, 10);
+        gradient.dark = this.shadeColor(this.sandColor, -5);
         return gradient;
     }
 
     generateWaterGradient() {
         const gradient = {};
-        gradient.light = this.shadeColor(this.waterColor, 15); // Lighter shade: +15%
-        gradient.dark = this.shadeColor(this.waterColor, -5); // Slightly darker: -5%
+        gradient.light = this.shadeColor(this.waterColor, 15);
+        gradient.dark = this.shadeColor(this.waterColor, -5);
         return gradient;
     }
 
     draw(ctx, startX) {
         const screenX = this.x - startX;
-        const sandHeight = 25; // Reduced from 50 to split beach evenly
+        const sandHeight = 25;
         const waterHeight = 25;
 
-        // Draw sand with gradient
         ctx.beginPath();
         ctx.moveTo(screenX, this.y);
         this.wavePoints.forEach(point => {
             const adjustedX = screenX + point.x;
             ctx.lineTo(adjustedX, point.y);
         });
-        ctx.lineTo(screenX + this.width, this.y); // Close at base
+        ctx.lineTo(screenX + this.width, this.y);
         ctx.closePath();
 
-        const sandGradient = ctx.createLinearGradient(
-            screenX, this.y,              // Top (shoreline)
-            screenX, this.y + sandHeight  // Bottom of sand
-        );
+        const sandGradient = ctx.createLinearGradient(screenX, this.y, screenX, this.y + sandHeight);
         sandGradient.addColorStop(0, this.sandGradient.light);
-        sandGradient.addColorStop(0.6, this.sandColor); // Base color dominates
+        sandGradient.addColorStop(0.6, this.sandColor);
         sandGradient.addColorStop(1, this.sandGradient.dark);
 
         ctx.fillStyle = sandGradient;
         ctx.fill();
 
-        // Draw water with gradient
         ctx.beginPath();
-        ctx.moveTo(screenX, this.y + sandHeight + waterHeight); // Bottom of water
+        ctx.moveTo(screenX, this.y + sandHeight + waterHeight);
         this.wavePoints.forEach(point => {
             const adjustedX = screenX + point.x;
             ctx.lineTo(adjustedX, point.y);
         });
-        ctx.lineTo(screenX + this.width, this.y + sandHeight + waterHeight); // Close at bottom
+        ctx.lineTo(screenX + this.width, this.y + sandHeight + waterHeight);
         ctx.closePath();
 
-        const waterGradient = ctx.createLinearGradient(
-            screenX, this.y + sandHeight,             // Top (wave line)
-            screenX, this.y + sandHeight + waterHeight // Bottom of water
-        );
+        const waterGradient = ctx.createLinearGradient(screenX, this.y + sandHeight, screenX, this.y + sandHeight + waterHeight);
         waterGradient.addColorStop(0, this.waterGradient.light);
-        waterGradient.addColorStop(0.6, this.waterColor); // Base color dominates
+        waterGradient.addColorStop(0.6, this.waterColor);
         waterGradient.addColorStop(1, this.waterGradient.dark);
 
         ctx.fillStyle = waterGradient;
         ctx.fill();
 
-        // Draw foam on waves
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.5)"; // Semi-transparent white
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
         ctx.lineWidth = 1;
 
         ctx.beginPath();
         this.wavePoints.forEach((point, index) => {
-            if (index % 2 === 0) { // Draw foam on every other point
+            if (index % 2 === 0) {
                 const adjustedX = screenX + point.x;
                 ctx.moveTo(adjustedX, point.y);
-                ctx.lineTo(adjustedX, point.y - 3); // Short vertical lines for foam
+                ctx.lineTo(adjustedX, point.y - 3);
             }
         });
         ctx.stroke();
@@ -444,10 +427,11 @@ export class TerrainAddons {
     }
 
     initializeAddons() {
-        const terrainLength = 100 * this.PIXELS_PER_DAY;
+        // Use the full path length from Environment
+        const terrainLength = 1000 * this.PIXELS_PER_DAY; // Match extended ground (200,000px)
 
         this.rocks = [];
-        for (let i = 0; i < 20; i++) {
+        for (let i = 0; i < 200; i++) { // Scale up to 200 rocks for longer terrain
             const worldX = Math.random() * terrainLength;
             const y = this.getPathY(worldX);
             const size = Math.random() * 10 + 5;
@@ -455,14 +439,14 @@ export class TerrainAddons {
         }
 
         this.trees = [];
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < 100; i++) { // Scale up to 100 individual trees
             const worldX = Math.random() * terrainLength;
             const y = this.getPathY(worldX);
             const height = Math.random() * 40 + 20;
             this.trees.push(new Tree(worldX, y, height));
         }
 
-        for (let i = 0; i < 3; i++) {
+        for (let i = 0; i < 30; i++) { // Scale up to 30 forest clusters
             const forestX = Math.random() * (terrainLength - 1000);
             const forestWidth = Math.random() * 500 + 300;
             const treeCount = Math.floor(Math.random() * 10) + 5;
@@ -475,15 +459,15 @@ export class TerrainAddons {
         }
 
         this.mountains = [];
-        for (let i = 0; i < 5; i++) {
+        for (let i = 0; i < 50; i++) { // Scale up to 50 mountains
             const worldX = Math.random() * terrainLength;
             const baseY = this.getPathY(worldX);
-            const isBackground = i < 2;
+            const isBackground = i < 20; // First 20 as background
             this.mountains.push(new Mountain(worldX, baseY, isBackground));
         }
 
         this.beaches = [];
-        for (let i = 0; i < 3; i++) {
+        for (let i = 0; i < 30; i++) { // Scale up to 30 beaches
             const worldX = Math.random() * (terrainLength - 1000);
             const y = this.getPathY(worldX);
             const width = Math.random() * 400 + 200;

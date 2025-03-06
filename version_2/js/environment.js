@@ -14,8 +14,6 @@ export class Environment {
     this.initializeClouds();
     this.initializeStars();
     this.addons = null; // Initialize as null; set after ground is ready
-
-    // Note: initializeGround is async, so we’ll call it separately
   }
 
   // Asynchronous ground initialization (call this separately)
@@ -32,30 +30,65 @@ export class Environment {
       const minPrice = Math.min(...prices);
       const maxPrice = Math.max(...prices);
 
-      this.path = prices.map((price, i) => [
+      // Normalize and map base stock data
+      const basePath = prices.map((price, i) => [
         i * this.PIXELS_PER_DAY,
         this.canvas.height - ((price - minPrice) / (maxPrice - minPrice)) * 300
       ]);
+
+      // Extend path by repeating with variation
+      const repeats = 10; // Extend to ~1000 days (200,000px, ~1000s at 200px/s)
+      const baseLength = basePath.length;
+      for (let r = 0; r < repeats; r++) {
+        const offsetX = baseLength * r * this.PIXELS_PER_DAY;
+        basePath.forEach(([x, y], i) => {
+          // Add variation: flip every other repeat, add slight noise
+          const variedY = (r % 2 === 0)
+            ? y + (Math.random() - 0.5) * 50 // Noise: ±25px
+            : this.canvas.height - (y - this.canvas.height) + (Math.random() - 0.5) * 50; // Flip + noise
+          this.path.push([offsetX + x, variedY]);
+        });
+      }
+
     } catch (error) {
       console.error('Error fetching stock data:', error);
-      this.generateSamplePath();
+      this.generateSamplePath(); // Fallback to procedural if fetch fails
     }
+
     // Initialize addons after path is set
     this.addons = new TerrainAddons(this.getPathY.bind(this));
     this.addons.initializeAddons();
   }
 
   generateSamplePath() {
-    this.path = Array.from({ length: 100 }, (_, i) => [
+    // Generate a longer procedural path (e.g., 1000 points = 200,000px)
+    this.path = Array.from({ length: 1000 }, (_, i) => [
       i * this.PIXELS_PER_DAY,
       this.canvas.height - Math.random() * 300
     ]);
+
+    // Smooth the procedural path to avoid abrupt jumps
+    for (let i = 1; i < this.path.length - 1; i++) {
+      const [prevX, prevY] = this.path[i - 1];
+      const [currX, currY] = this.path[i];
+      const [nextX, nextY] = this.path[i + 1];
+      this.path[i][1] = (prevY + currY + nextY) / 3; // Simple averaging for smoothness
+    }
   }
 
   getPathY(worldX) {
     const index = Math.floor(worldX / this.PIXELS_PER_DAY);
-    if (index < 0 || index >= this.path.length - 1 || this.path.length === 0) {
-      return this.canvas.height / 2; // Fallback to mid-screen if path isn’t ready
+    if (index < 0 || this.path.length === 0) {
+      return this.canvas.height / 2; // Before start or no path
+    }
+    if (index >= this.path.length - 1) {
+      // Extend procedurally if beyond path
+      const lastIndex = this.path.length - 1;
+      const [lastX, lastY] = this.path[lastIndex];
+      const [prevX, prevY] = this.path[lastIndex - 1];
+      const slope = (lastY - prevY) / (lastX - prevX);
+      const extraX = worldX - lastX;
+      return lastY + slope * extraX + (Math.random() - 0.5) * 50; // Continue slope with noise
     }
     const [x1, y1] = this.path[index];
     const [x2, y2] = this.path[index + 1];
@@ -65,8 +98,15 @@ export class Environment {
 
   getPathSlope(worldX) {
     const index = Math.floor(worldX / this.PIXELS_PER_DAY);
-    if (index < 0 || index >= this.path.length - 1 || this.path.length === 0) {
-      return 0; // Flat slope if path isn’t ready
+    if (index < 0 || this.path.length === 0) {
+      return 0; // Before start or no path
+    }
+    if (index >= this.path.length - 1) {
+      // Use last segment’s slope if beyond path
+      const lastIndex = this.path.length - 1;
+      const [x1, y1] = this.path[lastIndex - 1];
+      const [x2, y2] = this.path[lastIndex];
+      return (y2 - y1) / (x2 - x1);
     }
     const [x1, y1] = this.path[index];
     const [x2, y2] = this.path[index + 1];
@@ -74,30 +114,41 @@ export class Environment {
   }
 
   drawGround(bikeX) {
-    if (this.path.length === 0) return; // Don’t draw if path isn’t initialized
+    if (this.path.length === 0) return;
 
     const startX = bikeX - this.canvas.width / 2;
     const endX = bikeX + this.canvas.width / 2;
-    const startIndex = Math.max(0, Math.floor(startX / this.PIXELS_PER_DAY));
-    const endIndex = Math.min(this.path.length - 1, Math.ceil(endX / this.PIXELS_PER_DAY));
+    let startIndex = Math.max(0, Math.floor(startX / this.PIXELS_PER_DAY));
+    let endIndex = Math.min(this.path.length - 1, Math.ceil(endX / this.PIXELS_PER_DAY));
+
+    // Extend drawing beyond path if needed
+    const extendedPath = [];
+    for (let i = startIndex; i <= endIndex || i * this.PIXELS_PER_DAY <= endX; i++) {
+      const wx = i * this.PIXELS_PER_DAY;
+      if (i < this.path.length) {
+        extendedPath.push(this.path[i]);
+      } else {
+        const y = this.getPathY(wx);
+        extendedPath.push([wx, y]);
+      }
+    }
 
     // Draw grass below the path
     this.ctx.beginPath();
     this.ctx.moveTo(0, this.canvas.height);
-    for (let i = startIndex; i <= endIndex; i++) {
-      const [wx, wy] = this.path[i];
+    extendedPath.forEach(([wx, wy]) => {
       this.ctx.lineTo(wx - startX, wy);
-    }
+    });
     this.ctx.lineTo(this.canvas.width, this.canvas.height);
     this.ctx.closePath();
-    this.ctx.fillStyle = '#32CD32'; // Green grass
+    this.ctx.fillStyle = '#32CD32';
     this.ctx.fill();
 
     // Draw path (ground line)
     this.ctx.beginPath();
-    for (let i = startIndex; i < endIndex; i++) {
-      const [wx1, wy1] = this.path[i];
-      const [wx2, wy2] = this.path[i + 1];
+    for (let i = 0; i < extendedPath.length - 1; i++) {
+      const [wx1, wy1] = extendedPath[i];
+      const [wx2, wy2] = extendedPath[i + 1];
       this.ctx.moveTo(wx1 - startX, wy1);
       this.ctx.lineTo(wx2 - startX, wy2);
     }
@@ -505,6 +556,6 @@ export class Environment {
     this.addons.draw(this.ctx, bikeX); // Add rocks, trees, mountain, beach after ground
     this.drawStars();
     this.drawGround(bikeX);
-        
+
   }
 }
