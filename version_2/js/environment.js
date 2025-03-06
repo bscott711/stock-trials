@@ -1,3 +1,4 @@
+import { Rock, Tree, TerrainAddons } from './terrainAddons.js';
 export class Environment {
   constructor(canvas) {
     this.canvas = canvas;
@@ -6,11 +7,13 @@ export class Environment {
     this.cycleDuration = 120; // One day = 10 seconds
     this.cloudFreeDays = 0; //Math.random() > 0.5
     this.PIXELS_PER_DAY = 200; // Define the constant here, matching game.js
-
+    
     // Synchronous initializations
     this.path = []; // Initialize path as empty until initializeGround is called
     this.initializeClouds();
     this.initializeStars();
+    this.addons = null; // Initialize as null; set after ground is ready
+
     // Note: initializeGround is async, so we’ll call it separately
   }
 
@@ -36,6 +39,9 @@ export class Environment {
       console.error('Error fetching stock data:', error);
       this.generateSamplePath();
     }
+    // Initialize addons after path is set
+    this.addons = new TerrainAddons(this.getPathY.bind(this));
+    this.addons.initializeAddons();
   }
 
   generateSamplePath() {
@@ -495,7 +501,9 @@ export class Environment {
     this.drawSun();
     this.drawMoon();
     this.drawClouds();
+    this.addons.draw(this.ctx, bikeX); // Add rocks and trees after ground
     this.drawStars();
     this.drawGround(bikeX);
+        
   }
 }
