@@ -5,7 +5,7 @@ export class Environment {
     this.ctx = canvas.getContext("2d");
     this.time = 0;
     this.cycleDuration = 120;
-    this.cloudFreeDays = 0;
+    this.cloudFreeDays = Math.random() > 0.5
     this.PIXELS_PER_DAY = 200;
     this.moonPhaseOffset = Math.floor(Math.random() * 28);
 
@@ -119,7 +119,7 @@ export class Environment {
         extendedPath.push([wx, y]);
       }
     }
-    
+
     this.ctx.beginPath();
     this.ctx.moveTo(0, this.canvas.height);
     extendedPath.forEach(([wx, wy]) => {

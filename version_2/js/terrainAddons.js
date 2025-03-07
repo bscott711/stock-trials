@@ -158,35 +158,35 @@ export class Tree {
 }
 
 export class Mountain {
-    constructor(x, baseY, isBackground = false) {
+    constructor(x, baseY, getPathY, isBackground = false) {
         this.x = x;
-        this.baseY = baseY;
-        this.width = Math.random() * 1000 + 200; // Random width: 200-1200px
-        this.height = Math.random() * 400 + 100; // Random height: 100-500px
+        this.baseY = baseY; // Initial reference (for compatibility, but mostly unused)
+        this.getPathY = getPathY; // Function to get terrain height
+        this.width = Math.random() * 1000 + 200; // 200-1200px
+        this.height = Math.random() * 400 + 100; // 100-500px
         this.isBackground = isBackground;
 
-        // Precompute all random values during initialization
         this.peaks = this.generatePeaks();
         this.baseColor = this.generateBaseColor(isBackground);
         this.snowColor = this.generateSnowColor();
         this.roughness = Math.random() * 0.3 + 0.1; // 10-40% roughness
-        this.curveControlPoints = this.precomputeCurveControlPoints(); // Store control points for curves
+        this.curveControlPoints = this.precomputeCurveControlPoints();
     }
 
     generateBaseColor(isBackground) {
         const shade = isBackground 
-            ? Math.floor(Math.random() * 40 + 70) // Distant: 70-110
-            : Math.floor(Math.random() * 60 + 40); // Closer: 40-100
-        return `hsl(200, 20%, ${shade}%)`; // Fully opaque HSL color
+            ? Math.floor(Math.random() * 40 + 70) // 70-110
+            : Math.floor(Math.random() * 60 + 40); // 40-100
+        return `hsl(200, 20%, ${shade}%)`;
     }
 
     generateSnowColor() {
         const blueTint = Math.random() * 0.1;
-        return `hsl(210, 50%, ${95 - blueTint * 100}%)`; // Fully opaque HSL color
+        return `hsl(210, 50%, ${95 - blueTint * 100}%)`;
     }
 
     generatePeaks() {
-        const peakCount = Math.floor(this.width / 150) + 1; // More peaks for wider mountains
+        const peakCount = Math.floor(this.width / 150) + 1;
         const segmentWidth = this.width / peakCount;
         const peaks = [];
         let prevX = this.x - this.width / 2;
@@ -194,16 +194,13 @@ export class Mountain {
         for (let i = 0; i < peakCount; i++) {
             const baseX = prevX + segmentWidth * (Math.random() * 0.5 + 0.75);
             const offsetX = (Math.random() - 0.5) * segmentWidth * 0.3;
-            const peakX = Math.max(this.x - this.width / 2,
-                                 Math.min(this.x + this.width / 2, baseX + offsetX));
-
+            const peakX = Math.max(this.x - this.width / 2, Math.min(this.x + this.width / 2, baseX + offsetX));
             const peakHeight = this.height * (Math.random() * 0.7 + 0.3); // 30-100% height
             peaks.push({ x: peakX, height: peakHeight });
-
             prevX = peakX - segmentWidth * 0.5;
         }
 
-        // Ensure at least one dominant peak
+        // Normalize heights relative to max peak
         const maxPeak = Math.max(...peaks.map(p => p.height));
         peaks.forEach(peak => {
             peak.height = (peak.height / maxPeak) * this.height * 0.9 + this.height * 0.1;
@@ -214,11 +211,13 @@ export class Mountain {
 
     precomputeCurveControlPoints() {
         const controlPoints = [];
-        let prevPeak = { x: this.x - this.width / 2, y: this.baseY };
+        let prevPeak = { x: this.x - this.width / 2, y: this.getPathY(this.x - this.width / 2) };
 
         this.peaks.forEach(peak => {
+            const peakBaseY = this.getPathY(peak.x);
             const midX = (prevPeak.x + peak.x) / 2;
-            const midY = (prevPeak.y + (this.baseY - peak.height)) / 2;
+            const midBaseY = this.getPathY(midX);
+            const midY = (prevPeak.y + (peakBaseY - peak.height)) / 2;
             const controlOffset = (Math.random() - 0.5) * this.height * this.roughness;
 
             controlPoints.push({
@@ -226,7 +225,7 @@ export class Mountain {
                 midY: midY + controlOffset
             });
 
-            prevPeak = { x: peak.x, y: this.baseY - peak.height };
+            prevPeak = { x: peak.x, y: peakBaseY - peak.height };
         });
 
         return controlPoints;
@@ -237,80 +236,84 @@ export class Mountain {
         const leftX = screenX - this.width / 2;
         const rightX = screenX + this.width / 2;
 
-        // Create mountain gradient
+        // Find the highest peak and lowest base for gradient
+        const peakTops = this.peaks.map(p => this.getPathY(p.x) - p.height);
+        const highestY = Math.min(...peakTops);
+        const baseYs = [this.getPathY(this.x - this.width / 2), this.getPathY(this.x + this.width / 2)];
+        this.peaks.forEach(p => baseYs.push(this.getPathY(p.x)));
+        const lowestY = Math.max(...baseYs);
+
         const gradient = ctx.createLinearGradient(
-            leftX, this.baseY - this.height, // Start at the top
-            leftX, this.baseY               // End at the base
+            leftX, highestY - startX, // Top of highest peak
+            leftX, lowestY - startX   // Bottom of lowest base
         );
-        gradient.addColorStop(0, this.snowColor); // Snow at the top
-        gradient.addColorStop(0.7, this.shadeColor(this.baseColor, 20)); // Lighter midsection
-        gradient.addColorStop(1, this.baseColor); // Dark base
+        gradient.addColorStop(0, this.snowColor);
+        gradient.addColorStop(0.7, this.shadeColor(this.baseColor, 20));
+        gradient.addColorStop(1, this.baseColor);
 
-        // Draw mountain body with precomputed curves
+        // Draw mountain body
         ctx.beginPath();
-        ctx.moveTo(leftX, this.baseY);
+        const leftBaseY = this.getPathY(this.x - this.width / 2);
+        ctx.moveTo(leftX, leftBaseY);
 
-        let prevPeak = { x: leftX, y: this.baseY };
+        let prevPeak = { x: leftX, y: leftBaseY };
         this.peaks.forEach((peak, index) => {
             const peakScreenX = peak.x - startX;
-            const peakY = this.baseY - peak.height;
+            const peakBaseY = this.getPathY(peak.x);
+            const peakY = peakBaseY - peak.height;
 
             const controlPoint = this.curveControlPoints[index];
             const midX = controlPoint.midX - startX;
             const midY = controlPoint.midY;
 
-            ctx.quadraticCurveTo(
-                midX,
-                midY,
-                peakScreenX,
-                peakY
-            );
-
+            ctx.quadraticCurveTo(midX, midY, peakScreenX, peakY);
             prevPeak = { x: peakScreenX, y: peakY };
         });
 
-        ctx.lineTo(rightX, this.baseY);
-        ctx.closePath();
+        // Trace the ground back to the left
+        const rightBaseY = this.getPathY(this.x + this.width / 2);
+        ctx.lineTo(rightX, rightBaseY);
 
-        // Ensure fully opaque fill
-        ctx.fillStyle = gradient; // Gradient is fully opaque since baseColor and snowColor are opaque
+        // Draw base along terrain (right to left)
+        const steps = Math.floor(this.width / 50); // Sample every ~50px
+        for (let i = steps; i >= 0; i--) {
+            const sampleX = this.x - this.width / 2 + (i / steps) * this.width;
+            const sampleScreenX = sampleX - startX;
+            const sampleY = this.getPathY(sampleX);
+            ctx.lineTo(sampleScreenX, sampleY);
+        }
+
+        ctx.closePath();
+        ctx.fillStyle = gradient;
         ctx.fill();
 
-        // Draw snow caps with texture
+        // Draw snow caps
         this.peaks.forEach(peak => {
             const peakScreenX = peak.x - startX;
-            const snowHeight = peak.height * (Math.random() * 0.3 + 0.5); // 50-80%
+            const peakBaseY = this.getPathY(peak.x);
+            const snowHeight = peak.height * (Math.random() * 0.3 + 0.5);
 
             ctx.beginPath();
-            ctx.moveTo(peakScreenX - snowHeight, this.baseY - snowHeight);
+            ctx.moveTo(peakScreenX - snowHeight, peakBaseY - snowHeight);
 
-            // Create snow gradient
             const snowGradient = ctx.createRadialGradient(
-                peakScreenX,
-                this.baseY - peak.height,
-                0,
-                peakScreenX,
-                this.baseY - peak.height,
-                snowHeight * 2
+                peakScreenX, peakBaseY - peak.height, 0,
+                peakScreenX, peakBaseY - peak.height, snowHeight * 2
             );
             snowGradient.addColorStop(0, this.snowColor);
             snowGradient.addColorStop(1, this.shadeColor(this.snowColor, -30));
 
-            // Draw snow with bezier curve
             ctx.bezierCurveTo(
-                peakScreenX - snowHeight / 2, this.baseY - snowHeight,
-                peakScreenX + snowHeight / 2, this.baseY - snowHeight,
-                peakScreenX + snowHeight, this.baseY - snowHeight
+                peakScreenX - snowHeight / 2, peakBaseY - snowHeight,
+                peakScreenX + snowHeight / 2, peakBaseY - snowHeight,
+                peakScreenX + snowHeight, peakBaseY - snowHeight
             );
-
-            // Ensure fully opaque fill
-            ctx.fillStyle = snowGradient; // Gradient is fully opaque since snowColor is opaque
+            ctx.fillStyle = snowGradient;
             ctx.fill();
         });
     }
 
     shadeColor(color, percent) {
-        // Helper function to adjust color brightness
         let num = parseInt(color.slice(1), 16);
         let amt = Math.round(2.55 * percent);
         let R = (num >> 16) + amt;
@@ -325,80 +328,201 @@ export class Mountain {
 }
 
 class Beach {
-    constructor(x, y, width) {
+    constructor(x, y, width, getPathY, height = 75) { // Default height if not capped
         this.x = x;
-        this.y = y; // Ground level at this.x
+        this.y = y; // Initial reference (terrain height at x)
         this.width = width;
-        this.height = 75; // Wave height above ground
+        this.height = height; // Now passed from TerrainAddons, capped to valley depth
+        this.slopeWidth = 100; // Width of sloping edges
+        this.getPathY = getPathY;
     }
 
     draw(ctx, visibleStartX) {
         const screenX = this.x - visibleStartX;
-        // Water body from bottom to ground
-        ctx.fillStyle = 'rgba(0, 191, 255, 0.9)'; // Less transparent (was 0.7)
-        ctx.fillRect(screenX, this.y, this.width, ctx.canvas.height - this.y);
+        const leftEdge = this.x - this.slopeWidth;
+        const rightEdge = this.x + this.width + this.slopeWidth;
 
-        // Waves at ground level
+        // Draw water first (background layer)
+        ctx.fillStyle = 'rgba(0, 191, 255, 0.9)';
         ctx.beginPath();
-        for (let wx = 0; wx < this.width; wx += 10) {
-            const waveHeight = Math.sin((wx + this.x) * 0.1) * 5;
-            if (wx === 0) {
-                ctx.moveTo(screenX, this.y + waveHeight);
-            } else {
-                ctx.lineTo(screenX + wx, this.y + waveHeight);
+        const leftBaseY = this.getPathY(leftEdge);
+        ctx.moveTo(screenX - this.slopeWidth, leftBaseY);
+
+        // Left water slope up to wave height
+        const leftWaterStartX = this.x;
+        const leftWaterTopY = this.getPathY(leftWaterStartX) - this.height;
+        ctx.quadraticCurveTo(
+            screenX - this.slopeWidth / 2,
+            this.getPathY(leftEdge + this.slopeWidth / 2) - this.height / 2,
+            screenX,
+            leftWaterTopY
+        );
+
+        // Water top with waves
+        for (let wx = 0; wx <= this.width; wx += 10) {
+            const worldX = this.x + wx;
+            const groundY = this.getPathY(worldX);
+            const waveHeight = Math.sin(worldX * 0.1) * 5;
+            const waterY = groundY - this.height + waveHeight;
+            ctx.lineTo(screenX + wx, waterY);
+        }
+
+        // Right water slope down to terrain
+        const rightWaterEndX = this.x + this.width;
+        const rightWaterTopY = this.getPathY(rightWaterEndX) - this.height;
+        ctx.quadraticCurveTo(
+            screenX + this.width + this.slopeWidth / 2,
+            this.getPathY(rightEdge - this.slopeWidth / 2) - this.height / 2,
+            screenX + this.width + this.slopeWidth,
+            this.getPathY(rightEdge)
+        );
+
+        // Close water shape along terrain
+        for (let wx = this.width + this.slopeWidth; wx >= -this.slopeWidth; wx -= 50) {
+            const worldX = this.x + wx;
+            const groundY = this.getPathY(worldX);
+            ctx.lineTo(screenX + wx, groundY);
+        }
+        ctx.closePath();
+        ctx.fill();
+
+        // Draw foam on water (slopes and top)
+        ctx.beginPath();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+
+        // Left slope foam
+        for (let wx = -this.slopeWidth; wx < 0; wx += 10) {
+            const worldX = this.x + wx;
+            const groundY = this.getPathY(worldX);
+            const t = (wx + this.slopeWidth) / this.slopeWidth;
+            const waterY = groundY - this.height * t + Math.sin(worldX * 0.1) * 5;
+            if (Math.random() < 0.5) {
+                ctx.moveTo(screenX + wx, waterY);
+                ctx.lineTo(screenX + wx, waterY - 3);
             }
         }
-        ctx.lineTo(screenX + this.width, this.y);
-        ctx.lineTo(screenX, this.y);
+
+        // Top edge foam
+        for (let wx = 0; wx <= this.width; wx += 10) {
+            const worldX = this.x + wx;
+            const groundY = this.getPathY(worldX);
+            const waveHeight = Math.sin(worldX * 0.1) * 5;
+            const waterY = groundY - this.height + waveHeight;
+            if (Math.random() < 0.5) {
+                ctx.moveTo(screenX + wx, waterY);
+                ctx.lineTo(screenX + wx, waterY - 3);
+            }
+        }
+
+        // Right slope foam
+        for (let wx = this.width; wx <= this.width + this.slopeWidth; wx += 10) {
+            const worldX = this.x + wx;
+            const groundY = this.getPathY(worldX);
+            const t = (this.width + this.slopeWidth - wx) / this.slopeWidth;
+            const waterY = groundY - this.height * t + Math.sin(worldX * 0.1) * 5;
+            if (Math.random() < 0.5) {
+                ctx.moveTo(screenX + wx, waterY);
+                ctx.lineTo(screenX + wx, waterY - 3);
+            }
+        }
+        ctx.stroke();
+
+        // Draw sand second (foreground layer)
+        ctx.fillStyle = '#F4A460';
+        ctx.beginPath();
+        ctx.moveTo(screenX - this.slopeWidth, this.getPathY(leftEdge));
+
+        // Left sand slope to water edge
+        const leftSandTopY = leftWaterTopY + this.height / 2;
+        ctx.quadraticCurveTo(
+            screenX - this.slopeWidth / 2,
+            this.getPathY(leftEdge + this.slopeWidth / 2),
+            screenX,
+            leftSandTopY
+        );
+
+        // Sand across water area (above water)
+        for (let wx = 0; wx <= this.width; wx += 10) {
+            const worldX = this.x + wx;
+            const groundY = this.getPathY(worldX);
+            const sandY = groundY - this.height / 2;
+            ctx.lineTo(screenX + wx, sandY);
+        }
+
+        // Right sand slope back to terrain
+        const rightSandTopY = rightWaterTopY + this.height / 2;
+        ctx.quadraticCurveTo(
+            screenX + this.width + this.slopeWidth / 2,
+            this.getPathY(rightEdge - this.slopeWidth / 2),
+            screenX + this.width + this.slopeWidth,
+            this.getPathY(rightEdge)
+        );
+
+        // Trace terrain back to close sand shape
+        for (let wx = this.width + this.slopeWidth; wx >= -this.slopeWidth; wx -= 50) {
+            const worldX = this.x + wx;
+            const groundY = this.getPathY(worldX);
+            ctx.lineTo(screenX + wx, groundY);
+        }
         ctx.closePath();
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
         ctx.fill();
     }
 }
 
 export class TerrainAddons {
-    constructor(getPathY,ctx) {
+    constructor(getPathY, ctx) {
         this.getPathY = getPathY;
-        this.ctx = ctx; // Store ctx for canvas access
+        this.ctx = ctx;
         this.rocks = [];
         this.trees = [];
         this.mountains = [];
         this.beaches = [];
         this.PIXELS_PER_DAY = 200;
-        this.generatedRanges = new Map(); // Track generated x-ranges
+        this.generatedRanges = new Map();
     }
 
     initializeAddons() {
+        // Keeping it empty as per your version
     }
 
     generateAddonsInRange(startX, endX) {
-        const segmentSize = 5000; // Generate in 5000px chunks
+        const segmentSize = 5000;
         const startSegment = Math.floor(startX / segmentSize) * segmentSize;
         const endSegment = Math.ceil(endX / segmentSize) * segmentSize;
 
         for (let x = startSegment; x < endSegment; x += segmentSize) {
             const segmentStart = x;
-        
-            // Skip if already generated
+
             if (this.generatedRanges.has(segmentStart)) continue;
             this.generatedRanges.set(segmentStart, true);
-        
-            // Add a random offset to the segment start for each object type
-            const rockOffset = Math.random() * segmentSize * 0.5; // Up to 50% of segment size
+
+            const rockOffset = Math.random() * segmentSize * 0.5;
             const treeOffset = Math.random() * segmentSize * 0.5;
             const forestOffset = Math.random() * segmentSize * 0.5;
             const mountainOffset = Math.random() * segmentSize * 0.5;
             const beachOffset = Math.random() * segmentSize * 0.5;
-        
-            // Rocks: ~1 per 1000px
-            const rockCount = Math.floor(segmentSize / 1000);
+
+            // Rocks: ~1 per 1000px, with clusters
+            const rockCount = Math.floor(segmentSize / 1000); // 5 rocks per 5000px
             for (let i = 0; i < rockCount; i++) {
-                const worldX = segmentStart + rockOffset + Math.random() * segmentSize;
-                const y = this.getPathY(worldX);
-                const size = Math.random() * 10 + 5;
-                this.rocks.push(new Rock(worldX, y, size));
+                if (Math.random() < 0.3) { // 30% chance of a cluster
+                    const clusterX = segmentStart + rockOffset + Math.random() * segmentSize;
+                    const clusterWidth = Math.random() * 150 + 100; // 100-250px wide
+                    const clusterRockCount = Math.floor(Math.random() * 4) + 3; // 3-6 rocks
+                    for (let j = 0; j < clusterRockCount; j++) {
+                        const rockX = clusterX + (Math.random() - 0.5) * clusterWidth;
+                        const y = this.getPathY(rockX);
+                        const size = Math.random() * 15 + 5; // 5-20px base size
+                        this.rocks.push(new Rock(rockX, y, size));
+                    }
+                } else { // 70% chance of a single rock
+                    const worldX = segmentStart + rockOffset + Math.random() * segmentSize;
+                    const y = this.getPathY(worldX);
+                    const size = Math.random() * 10 + 5; // 5-15px base size
+                    this.rocks.push(new Rock(worldX, y, size));
+                }
             }
-        
+
             // Trees: ~1 individual per 2000px
             const treeCount = Math.floor(segmentSize / 2000);
             for (let i = 0; i < treeCount; i++) {
@@ -407,7 +531,7 @@ export class TerrainAddons {
                 const height = Math.random() * 40 + 20;
                 this.trees.push(new Tree(worldX, y, height));
             }
-        
+
             // Forests: ~1 cluster per 6667px
             const forestCount = Math.floor(segmentSize / 6667);
             for (let i = 0; i < Math.max(1, forestCount); i++) {
@@ -421,27 +545,50 @@ export class TerrainAddons {
                     this.trees.push(new Tree(treeX, y, height));
                 }
             }
-        
+
             // Mountains: ~1 per 4000px
             const mountainCount = Math.floor(segmentSize / 4000);
             for (let i = 0; i < Math.max(1, mountainCount); i++) {
                 const worldX = segmentStart + mountainOffset + Math.random() * segmentSize;
                 const baseY = this.getPathY(worldX);
-                const isBackground = Math.random() < 0.4; // 40% background
-                this.mountains.push(new Mountain(worldX, baseY, isBackground));
+                const isBackground = Math.random() < 0.4;
+                this.mountains.push(new Mountain(worldX, baseY, this.getPathY, isBackground));
             }
-        
-            // Beaches: ~1 per 6667px
+
+            // Beaches: ~1 per 6667px, at valley base with capped height
             const beachCount = Math.floor(segmentSize / 6667);
             for (let i = 0; i < Math.max(1, beachCount); i++) {
-                const worldX = segmentStart + beachOffset + Math.random() * (segmentSize - 1000);
-                const y = this.getPathY(worldX);
-                const width = Math.random() * 400 + 200;
-                this.beaches.push(new Beach(worldX, y, width));
+                const baseX = segmentStart + beachOffset + Math.random() * (segmentSize - 1000);
+                const width = Math.random() * 400 + 200; // 200-600px
+
+                // Find the valley base within the potential width
+                let lowestX = baseX;
+                let lowestY = this.getPathY(baseX);
+                const leftBound = baseX - width / 2;
+                const rightBound = baseX + width / 2;
+                for (let sampleX = leftBound; sampleX <= rightBound; sampleX += 10) {
+                    const sampleY = this.getPathY(sampleX);
+                    if (sampleY > lowestY) { // Higher y = lower on canvas
+                        lowestX = sampleX;
+                        lowestY = sampleY;
+                    }
+                }
+
+                // Check if it's a valley and get its depth
+                const leftEdge = lowestX - width / 2;
+                const rightEdge = lowestX + width / 2;
+                const leftY = this.getPathY(leftEdge);
+                const rightY = this.getPathY(rightEdge);
+                const valleyThreshold = 20; // Min dip
+                if (lowestY > leftY - valleyThreshold && lowestY > rightY - valleyThreshold) {
+                    // Cap height to valley depth (min distance to edges)
+                    const valleyDepth = Math.min(lowestY - leftY, lowestY - rightY);
+                    const cappedHeight = Math.min(75, valleyDepth * 0.9); // 90% of depth, max 75px
+                    this.beaches.push(new Beach(lowestX, lowestY, width, this.getPathY, cappedHeight));
+                }
             }
         }
 
-        // Prune add-ons using this.ctx
         const pruneThreshold = startX - 2 * this.ctx.canvas.width;
         this.rocks = this.rocks.filter(item => item.x >= pruneThreshold);
         this.trees = this.trees.filter(item => item.x >= pruneThreshold);
@@ -467,15 +614,15 @@ export class TerrainAddons {
             }
         });
 
-        this.beaches.forEach(beach => {
-            if (beach.x <= visibleEndX && beach.x + beach.width >= visibleStartX) {
-                beach.draw(ctx, visibleStartX);
-            }
-        });
-
         this.mountains.filter(m => !m.isBackground).forEach(mountain => {
             if (mountain.x - mountain.width / 2 <= visibleEndX && mountain.x + mountain.width / 2 >= visibleStartX) {
                 mountain.draw(ctx, visibleStartX);
+            }
+        });
+
+        this.beaches.forEach(beach => {
+            if (beach.x <= visibleEndX && beach.x + beach.width >= visibleStartX) {
+                beach.draw(ctx, visibleStartX);
             }
         });
 
