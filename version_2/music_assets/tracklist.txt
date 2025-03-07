@@ -1,10 +1,17 @@
+A Place We Can Afford.mp3
+A Pricer Dream.mp3
+A Year Older, A Room Messier.mp3
+Birthday Reflections.mp3
 Chasing the Horizon.mp3
 Chuckle Fest.mp3
-Crescendo’s Fire.mp3
+Crescendo's Fire.mp3
 Data Revolution ext.mp3
 Desenho da Tesoura.mp3
 Emailing the Pope.mp3
+Endless Cycle.mp3
 Endless Rides.mp3
+Eternal Legends.mp3
+Final Requiem.mp3
 Glow of Discovery.mp3
 Jesters of Greed.mp3
 Joy in Every Cell.mp3
@@ -12,7 +19,10 @@ Loopholes and Labyrinths.mp3
 Molar Mutilation.mp3
 Molecular Melody.mp3
 Morning's Fury Shanty.mp3
+Non Eternal Legends.mp3
 Outback Mates.mp3
+Price of a Dream.mp3
+Promises Unyielding.mp3
 Promises Unyieldingv1.mp3
 Promises UnyieldingV2.mp3
 Quantum Voyagersv1.mp3
@@ -23,5 +33,10 @@ Silent Valor.mp3
 Straightway Journey.mp3
 Summer Laughter Waltzv1.mp3
 Summer Laughter Waltzv2.mp3
+The Nut Chase.mp3
+tracklist.txt
 Unplanned Perfection.mp3
+Urban Escape.mp3
+Voices in the Shadows.mp3
 Warm Winter Memories.mp3
+Web of Burdens.mp3
