@@ -1,4 +1,4 @@
-import { TerrainAddons } from './terrainAddons.js';
+import { TerrainAddons } from './TerrainAddons.js';
 export class Environment {
   constructor(canvas) {
     this.canvas = canvas;
@@ -535,11 +535,11 @@ export class Environment {
 
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.drawSky();
+    this.drawStars();
     this.drawSun();
     this.drawMoon();
     this.drawClouds();
     this.addons.draw(this.ctx, bikeX); // Add rocks, trees, mountain, beach after ground
-    this.drawStars();
     this.drawGround(bikeX);
 
   }

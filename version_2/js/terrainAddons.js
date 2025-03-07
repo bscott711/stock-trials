@@ -161,30 +161,32 @@ export class Mountain {
     constructor(x, baseY, isBackground = false) {
         this.x = x;
         this.baseY = baseY;
-        this.width = Math.random() * 1000 + 200;
-        this.height = Math.random() * 400 + 100;
+        this.width = Math.random() * 1000 + 200; // Random width: 200-1200px
+        this.height = Math.random() * 400 + 100; // Random height: 100-500px
         this.isBackground = isBackground;
+
+        // Precompute all random values during initialization
         this.peaks = this.generatePeaks();
         this.baseColor = this.generateBaseColor(isBackground);
         this.snowColor = this.generateSnowColor();
-        this.roughness = Math.random() * 0.3 + 0.1;
-        this.curveControlPoints = this.precomputeCurveControlPoints();
+        this.roughness = Math.random() * 0.3 + 0.1; // 10-40% roughness
+        this.curveControlPoints = this.precomputeCurveControlPoints(); // Store control points for curves
     }
 
     generateBaseColor(isBackground) {
-        const shade = isBackground
-            ? Math.floor(Math.random() * 40 + 70)
-            : Math.floor(Math.random() * 60 + 40);
-        return `hsl(200, 20%, ${shade}%)`;
+        const shade = isBackground 
+            ? Math.floor(Math.random() * 40 + 70) // Distant: 70-110
+            : Math.floor(Math.random() * 60 + 40); // Closer: 40-100
+        return `hsl(200, 20%, ${shade}%)`; // Fully opaque HSL color
     }
 
     generateSnowColor() {
         const blueTint = Math.random() * 0.1;
-        return `hsl(210, 50%, ${95 - blueTint * 100}%)`;
+        return `hsl(210, 50%, ${95 - blueTint * 100}%)`; // Fully opaque HSL color
     }
 
     generatePeaks() {
-        const peakCount = Math.floor(this.width / 150) + 1;
+        const peakCount = Math.floor(this.width / 150) + 1; // More peaks for wider mountains
         const segmentWidth = this.width / peakCount;
         const peaks = [];
         let prevX = this.x - this.width / 2;
@@ -192,12 +194,16 @@ export class Mountain {
         for (let i = 0; i < peakCount; i++) {
             const baseX = prevX + segmentWidth * (Math.random() * 0.5 + 0.75);
             const offsetX = (Math.random() - 0.5) * segmentWidth * 0.3;
-            const peakX = Math.max(this.x - this.width / 2, Math.min(this.x + this.width / 2, baseX + offsetX));
-            const peakHeight = this.height * (Math.random() * 0.7 + 0.3);
+            const peakX = Math.max(this.x - this.width / 2,
+                                 Math.min(this.x + this.width / 2, baseX + offsetX));
+
+            const peakHeight = this.height * (Math.random() * 0.7 + 0.3); // 30-100% height
             peaks.push({ x: peakX, height: peakHeight });
+
             prevX = peakX - segmentWidth * 0.5;
         }
 
+        // Ensure at least one dominant peak
         const maxPeak = Math.max(...peaks.map(p => p.height));
         peaks.forEach(peak => {
             peak.height = (peak.height / maxPeak) * this.height * 0.9 + this.height * 0.1;
@@ -231,11 +237,16 @@ export class Mountain {
         const leftX = screenX - this.width / 2;
         const rightX = screenX + this.width / 2;
 
-        const gradient = ctx.createLinearGradient(leftX, this.baseY - this.height, leftX, this.baseY);
-        gradient.addColorStop(0, this.snowColor);
-        gradient.addColorStop(0.7, this.shadeColor(this.baseColor, 20));
-        gradient.addColorStop(1, this.baseColor);
+        // Create mountain gradient
+        const gradient = ctx.createLinearGradient(
+            leftX, this.baseY - this.height, // Start at the top
+            leftX, this.baseY               // End at the base
+        );
+        gradient.addColorStop(0, this.snowColor); // Snow at the top
+        gradient.addColorStop(0.7, this.shadeColor(this.baseColor, 20)); // Lighter midsection
+        gradient.addColorStop(1, this.baseColor); // Dark base
 
+        // Draw mountain body with precomputed curves
         ctx.beginPath();
         ctx.moveTo(leftX, this.baseY);
 
@@ -248,40 +259,58 @@ export class Mountain {
             const midX = controlPoint.midX - startX;
             const midY = controlPoint.midY;
 
-            ctx.quadraticCurveTo(midX, midY, peakScreenX, peakY);
+            ctx.quadraticCurveTo(
+                midX,
+                midY,
+                peakScreenX,
+                peakY
+            );
+
             prevPeak = { x: peakScreenX, y: peakY };
         });
 
         ctx.lineTo(rightX, this.baseY);
         ctx.closePath();
-        ctx.fillStyle = gradient;
+
+        // Ensure fully opaque fill
+        ctx.fillStyle = gradient; // Gradient is fully opaque since baseColor and snowColor are opaque
         ctx.fill();
 
+        // Draw snow caps with texture
         this.peaks.forEach(peak => {
             const peakScreenX = peak.x - startX;
-            const snowHeight = peak.height * (Math.random() * 0.3 + 0.5);
+            const snowHeight = peak.height * (Math.random() * 0.3 + 0.5); // 50-80%
 
             ctx.beginPath();
             ctx.moveTo(peakScreenX - snowHeight, this.baseY - snowHeight);
 
+            // Create snow gradient
             const snowGradient = ctx.createRadialGradient(
-                peakScreenX, this.baseY - peak.height, 0,
-                peakScreenX, this.baseY - peak.height, snowHeight * 2
+                peakScreenX,
+                this.baseY - peak.height,
+                0,
+                peakScreenX,
+                this.baseY - peak.height,
+                snowHeight * 2
             );
             snowGradient.addColorStop(0, this.snowColor);
             snowGradient.addColorStop(1, this.shadeColor(this.snowColor, -30));
 
+            // Draw snow with bezier curve
             ctx.bezierCurveTo(
                 peakScreenX - snowHeight / 2, this.baseY - snowHeight,
                 peakScreenX + snowHeight / 2, this.baseY - snowHeight,
                 peakScreenX + snowHeight, this.baseY - snowHeight
             );
-            ctx.fillStyle = snowGradient;
+
+            // Ensure fully opaque fill
+            ctx.fillStyle = snowGradient; // Gradient is fully opaque since snowColor is opaque
             ctx.fill();
         });
     }
 
     shadeColor(color, percent) {
+        // Helper function to adjust color brightness
         let num = parseInt(color.slice(1), 16);
         let amt = Math.round(2.55 * percent);
         let R = (num >> 16) + amt;
@@ -340,9 +369,6 @@ export class TerrainAddons {
     }
 
     initializeAddons() {
-        // Optional: Pre-generate initial segment (e.g., first 20,000px)
-        const initialLength = 100 * this.PIXELS_PER_DAY; // First 100 days
-        this.generateAddonsInRange(0, initialLength);
     }
 
     generateAddonsInRange(startX, endX) {
@@ -352,33 +378,40 @@ export class TerrainAddons {
 
         for (let x = startSegment; x < endSegment; x += segmentSize) {
             const segmentStart = x;
-            const segmentEnd = x + segmentSize;
-
+        
             // Skip if already generated
             if (this.generatedRanges.has(segmentStart)) continue;
             this.generatedRanges.set(segmentStart, true);
-
+        
+            // Add a random offset to the segment start for each object type
+            const rockOffset = Math.random() * segmentSize * 0.5; // Up to 50% of segment size
+            const treeOffset = Math.random() * segmentSize * 0.5;
+            const forestOffset = Math.random() * segmentSize * 0.5;
+            const mountainOffset = Math.random() * segmentSize * 0.5;
+            const beachOffset = Math.random() * segmentSize * 0.5;
+        
             // Rocks: ~1 per 1000px
             const rockCount = Math.floor(segmentSize / 1000);
             for (let i = 0; i < rockCount; i++) {
-                const worldX = segmentStart + Math.random() * segmentSize;
+                const worldX = segmentStart + rockOffset + Math.random() * segmentSize;
                 const y = this.getPathY(worldX);
                 const size = Math.random() * 10 + 5;
                 this.rocks.push(new Rock(worldX, y, size));
             }
-
-            // Trees: ~1 individual per 2000px, ~1 forest cluster per 6667px
+        
+            // Trees: ~1 individual per 2000px
             const treeCount = Math.floor(segmentSize / 2000);
             for (let i = 0; i < treeCount; i++) {
-                const worldX = segmentStart + Math.random() * segmentSize;
+                const worldX = segmentStart + treeOffset + Math.random() * segmentSize;
                 const y = this.getPathY(worldX);
                 const height = Math.random() * 40 + 20;
                 this.trees.push(new Tree(worldX, y, height));
             }
-
+        
+            // Forests: ~1 cluster per 6667px
             const forestCount = Math.floor(segmentSize / 6667);
             for (let i = 0; i < Math.max(1, forestCount); i++) {
-                const forestX = segmentStart + Math.random() * (segmentSize - 1000);
+                const forestX = segmentStart + forestOffset + Math.random() * (segmentSize - 1000);
                 const forestWidth = Math.random() * 500 + 300;
                 const treeCount = Math.floor(Math.random() * 10) + 5;
                 for (let j = 0; j < treeCount; j++) {
@@ -388,20 +421,20 @@ export class TerrainAddons {
                     this.trees.push(new Tree(treeX, y, height));
                 }
             }
-
+        
             // Mountains: ~1 per 4000px
             const mountainCount = Math.floor(segmentSize / 4000);
             for (let i = 0; i < Math.max(1, mountainCount); i++) {
-                const worldX = segmentStart + Math.random() * segmentSize;
+                const worldX = segmentStart + mountainOffset + Math.random() * segmentSize;
                 const baseY = this.getPathY(worldX);
                 const isBackground = Math.random() < 0.4; // 40% background
                 this.mountains.push(new Mountain(worldX, baseY, isBackground));
             }
-
+        
             // Beaches: ~1 per 6667px
             const beachCount = Math.floor(segmentSize / 6667);
             for (let i = 0; i < Math.max(1, beachCount); i++) {
-                const worldX = segmentStart + Math.random() * (segmentSize - 1000);
+                const worldX = segmentStart + beachOffset + Math.random() * (segmentSize - 1000);
                 const y = this.getPathY(worldX);
                 const width = Math.random() * 400 + 200;
                 this.beaches.push(new Beach(worldX, y, width));
