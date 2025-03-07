@@ -5,7 +5,7 @@ import { MusicManager } from './music_manager.js';
 export const vibes = (function () {
     let canvas = document.getElementById('gameCanvas');
     let time = 0;
-    let environment = null; // Explicitly initialize as null
+    let environment = null;
     const musicManager = new MusicManager('./music_assets');
 
     // DOM elements
@@ -18,7 +18,6 @@ export const vibes = (function () {
     const progressBar = document.getElementById('progressBar');
     const autoplayBlockedNotice = document.getElementById('autoplayBlockedNotice');
 
-    // Promise to track initialization
     let initPromiseResolve;
     const initPromise = new Promise(resolve => {
         initPromiseResolve = resolve;
@@ -28,10 +27,10 @@ export const vibes = (function () {
         try {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
-            environment = new Environment(canvas); // Assign to the outer environment
-            console.log('Environment created:', environment); // Debug: Check creation
+            environment = new Environment(canvas);
+            console.log('Environment created:', environment);
             await environment.initializeGround(); // Wait for ground data
-            console.log('Ground initialized, environment:', environment); // Debug: Post-ground
+            console.log('Ground initialized, environment:', environment);
 
             await musicManager.initializeMusic();
 
@@ -96,23 +95,22 @@ export const vibes = (function () {
                 isPaused = !isPaused;
             });
 
+            // Start animation only after initialization completes
             function animate() {
                 environment.update();
                 requestAnimationFrame(animate);
             }
-            animate();
-
-            console.log('Before resolving vibes.ready, environment:', environment); // Debug: Pre-resolve
+            console.log('Before resolving vibes.ready, environment:', environment);
             initPromiseResolve();
+            animate(); // Move animate() after resolve to ensure initialization is complete
         } catch (error) {
             console.error('Vibes initialization failed:', error);
-            throw error; // Ensure the promise rejects on error
+            throw error;
         }
     }
 
     document.addEventListener('DOMContentLoaded', initialize);
 
-    // Return object with environment explicitly included
     return {
         get time() { return time; },
         set time(value) { time = value; },
@@ -123,7 +121,7 @@ export const vibes = (function () {
         update(bikeX) {
             if (environment) environment.update(bikeX);
         },
-        get environment() { return environment; }, // Use a getter for clarity
+        get environment() { return environment; },
         ready: initPromise
     };
 })();

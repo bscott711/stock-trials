@@ -4,91 +4,76 @@ export class Environment {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d");
     this.time = 0;
-    this.cycleDuration = 120; // One day = 10 seconds
-    this.cloudFreeDays = 0; //Math.random() > 0.5
-    this.PIXELS_PER_DAY = 200; // Define the constant here, matching game.js
-    this.moonPhaseOffset = Math.floor(Math.random() * 28); // Random offset: 0-27 days
+    this.cycleDuration = 120;
+    this.cloudFreeDays = 0;
+    this.PIXELS_PER_DAY = 200;
+    this.moonPhaseOffset = Math.floor(Math.random() * 28);
 
-    // Synchronous initializations
-    this.path = []; // Initialize path as empty until initializeGround is called
+    this.path = [];
     this.initializeClouds();
     this.initializeStars();
-    this.addons = null; // Initialize as null; set after ground is ready
+    this.addons = null;
   }
 
-  // Asynchronous ground initialization (call this separately)
   async initializeGround() {
     this.path = [];
-    try {
-      const response = await fetch('https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=AAPL&apikey=98QKC7GE5OJVUCOE');
-      const data = await response.json();
-      if (!data['Time Series (Daily)']) throw new Error('Invalid API response');
-
-      const timeSeries = data['Time Series (Daily)'];
-      const dates = Object.keys(timeSeries).sort();
-      const prices = dates.map(date => parseFloat(timeSeries[date]['4. close']));
-      const minPrice = Math.min(...prices);
-      const maxPrice = Math.max(...prices);
-
-      // Normalize and map base stock data
-      const basePath = prices.map((price, i) => [
-        i * this.PIXELS_PER_DAY,
-        this.canvas.height - ((price - minPrice) / (maxPrice - minPrice)) * 300
-      ]);
-
-      // Extend path by repeating with variation
-      const repeats = 10; // Extend to ~1000 days (200,000px, ~1000s at 200px/s)
-      const baseLength = basePath.length;
-      for (let r = 0; r < repeats; r++) {
-        const offsetX = baseLength * r * this.PIXELS_PER_DAY;
-        basePath.forEach(([x, y], i) => {
-          // Add variation: flip every other repeat, add slight noise
-          const variedY = (r % 2 === 0)
-            ? y + (Math.random() - 0.5) * 50 // Noise: ±25px
-            : this.canvas.height - (y - this.canvas.height) + (Math.random() - 0.5) * 50; // Flip + noise
-          this.path.push([offsetX + x, variedY]);
-        });
-      }
-
-    } catch (error) {
-      console.error('Error fetching stock data:', error);
-      this.generateSamplePath(); // Fallback to procedural if fetch fails
-    }
-
-    // Initialize addons after path is set
-    this.addons = new TerrainAddons(this.getPathY.bind(this));
+    this.generateSamplePath();
+    this.addons = new TerrainAddons(this.getPathY.bind(this), this.ctx);
     this.addons.initializeAddons();
   }
 
   generateSamplePath() {
-    // Generate a longer procedural path (e.g., 1000 points = 200,000px)
-    this.path = Array.from({ length: 1000 }, (_, i) => [
+    const baseDays = 100; // Changed back to 100
+    const minY = this.canvas.height * 0.2;
+    const maxY = this.canvas.height * 0.8;
+    const basePath = Array.from({ length: baseDays }, (_, i) => [
       i * this.PIXELS_PER_DAY,
-      this.canvas.height - Math.random() * 300
+      minY + Math.random() * (maxY - minY)
     ]);
 
-    // Smooth the procedural path to avoid abrupt jumps
-    for (let i = 1; i < this.path.length - 1; i++) {
-      const [prevX, prevY] = this.path[i - 1];
-      const [currX, currY] = this.path[i];
-      const [nextX, nextY] = this.path[i + 1];
-      this.path[i][1] = (prevY + currY + nextY) / 3; // Simple averaging for smoothness
+    // Restore full smoothing for 100 points
+    for (let i = 0; i < basePath.length; i++) {
+      let prevY = i === 0 ? basePath[1][1] : basePath[i - 1][1];
+      let currY = basePath[i][1];
+      let nextY = i === basePath.length - 1 ? basePath[i - 1][1] : basePath[i + 1][1];
+      basePath[i][1] = Math.min(maxY, Math.max(minY, (prevY + currY + nextY) / 3));
     }
+
+    const repeats = 10;
+    const baseLength = basePath.length;
+    for (let r = 0; r < repeats; r++) {
+      const offsetX = baseLength * r * this.PIXELS_PER_DAY;
+      basePath.forEach(([x, y], i) => {
+        const variedY = (r % 2 === 0)
+          ? y + (Math.random() - 0.5) * 5
+          : this.canvas.height - (y - this.canvas.height) + (Math.random() - 0.5) * 5;
+        this.path.push([offsetX + x, Math.min(maxY, Math.max(minY, variedY))]);
+      });
+    }
+    console.log('Initial path points:', this.path.slice(0, 5), 'Total length:', this.path.length);
   }
 
   getPathY(worldX) {
     const index = Math.floor(worldX / this.PIXELS_PER_DAY);
     if (index < 0 || this.path.length === 0) {
-      return this.canvas.height / 2; // Before start or no path
+      return this.canvas.height / 2;
     }
     if (index >= this.path.length - 1) {
-      // Extend procedurally if beyond path
       const lastIndex = this.path.length - 1;
       const [lastX, lastY] = this.path[lastIndex];
       const [prevX, prevY] = this.path[lastIndex - 1];
       const slope = (lastY - prevY) / (lastX - prevX);
       const extraX = worldX - lastX;
-      return lastY + slope * extraX + (Math.random() - 0.5) * 50; // Continue slope with noise
+      const baseLength = 100 * this.PIXELS_PER_DAY; // Updated to 20,000px
+      const cycleX = extraX >= 0 ? extraX % baseLength : (baseLength + (extraX % baseLength)) % baseLength;
+      const cycleIndex = Math.floor(cycleX / this.PIXELS_PER_DAY);
+      const safeIndex = Math.min(99, Math.max(0, cycleIndex)); // Updated to 0-99
+      const baseY = this.path[safeIndex][1];
+      // Keep sine-based hills (optional: remove if you want to rely on base cycle)
+      const hillHeight = 100;
+      const hillPeriod = 2000;
+      const hillVariation = hillHeight * Math.sin(worldX / hillPeriod);
+      return Math.min(this.canvas.height * 0.8, Math.max(this.canvas.height * 0.2, lastY + slope * extraX + hillVariation));
     }
     const [x1, y1] = this.path[index];
     const [x2, y2] = this.path[index + 1];
@@ -99,14 +84,17 @@ export class Environment {
   getPathSlope(worldX) {
     const index = Math.floor(worldX / this.PIXELS_PER_DAY);
     if (index < 0 || this.path.length === 0) {
-      return 0; // Before start or no path
+      return 0;
     }
     if (index >= this.path.length - 1) {
-      // Use last segment’s slope if beyond path
       const lastIndex = this.path.length - 1;
       const [x1, y1] = this.path[lastIndex - 1];
       const [x2, y2] = this.path[lastIndex];
-      return (y2 - y1) / (x2 - x1);
+      const slope = (y2 - y1) / (x2 - x1);
+      const hillPeriod = 2000;
+      const hillHeight = 100;
+      const hillSlope = (hillHeight * Math.PI / hillPeriod) * Math.cos(worldX / hillPeriod);
+      return slope + hillSlope;
     }
     const [x1, y1] = this.path[index];
     const [x2, y2] = this.path[index + 1];
@@ -115,15 +103,14 @@ export class Environment {
 
   drawGround(bikeX) {
     if (this.path.length === 0) return;
-
     const startX = bikeX - this.canvas.width / 2;
-    const endX = bikeX + this.canvas.width / 2;
-    let startIndex = Math.max(0, Math.floor(startX / this.PIXELS_PER_DAY));
-    let endIndex = Math.min(this.path.length - 1, Math.ceil(endX / this.PIXELS_PER_DAY));
+    const endX = bikeX + this.canvas.width * 2;
 
-    // Extend drawing beyond path if needed
+    let startIndex = Math.max(0, Math.floor(startX / this.PIXELS_PER_DAY));
+    let endIndex = Math.ceil(endX / this.PIXELS_PER_DAY);
+
     const extendedPath = [];
-    for (let i = startIndex; i <= endIndex || i * this.PIXELS_PER_DAY <= endX; i++) {
+    for (let i = startIndex; i <= endIndex; i++) {
       const wx = i * this.PIXELS_PER_DAY;
       if (i < this.path.length) {
         extendedPath.push(this.path[i]);
@@ -132,8 +119,7 @@ export class Environment {
         extendedPath.push([wx, y]);
       }
     }
-
-    // Draw grass below the path
+    
     this.ctx.beginPath();
     this.ctx.moveTo(0, this.canvas.height);
     extendedPath.forEach(([wx, wy]) => {
@@ -144,7 +130,6 @@ export class Environment {
     this.ctx.fillStyle = '#32CD32';
     this.ctx.fill();
 
-    // Draw path (ground line)
     this.ctx.beginPath();
     for (let i = 0; i < extendedPath.length - 1; i++) {
       const [wx1, wy1] = extendedPath[i];

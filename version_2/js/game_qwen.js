@@ -30,13 +30,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     let gameOver = false;
     let lastTime = 0;
 
-    // Wait for vibes to be fully initialized
-    await vibes.ready;
-    console.log('After vibes.ready, environment:', vibes.environment); // Debug log
-
-    // Set initial bike position after vibes is ready
-    bike.y = vibes.environment.getPathY(0); // Line 37, where the error occurs
-    bike.angle = Math.atan(vibes.environment.getPathSlope(0));
+    try {
+        await vibes.ready;
+        console.log('After vibes.ready, environment:', vibes.environment);
+        bike.y = vibes.environment.getPathY(0);
+        bike.angle = Math.atan(vibes.environment.getPathSlope(0));
+        // Start the game loop
+        requestAnimationFrame(gameLoop);
+    } catch (error) {
+        console.error('Failed to initialize vibes:', error);
+        ctx.fillStyle = 'white';
+        ctx.font = '20px Arial';
+        ctx.fillText('Failed to load game: ' + error.message, 20, 50);
+        return; // Stop execution if vibes fails
+    }
 
     // Game loop
     function gameLoop(timestamp) {
@@ -70,18 +77,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     function updateBike(deltaTime) {
         if (gameOver) return;
         bike.x += BIKE_SPEED * deltaTime;
-
+    
         if (bike.state === 'on_ground') {
             bike.y = vibes.environment.getPathY(bike.x);
             bike.angle = Math.atan(vibes.environment.getPathSlope(bike.x));
         } else {
-            // In air
             bike.v_y += GRAVITY * deltaTime;
             bike.y += bike.v_y * deltaTime;
             bike.angle += bike.rotationSpeed * deltaTime;
             bike.totalRotation += bike.rotationSpeed * deltaTime;
-
-            // Check for landing
+    
+            // Clamp y to stay on screen
+            bike.y = Math.min(canvas.height, Math.max(0, bike.y));
+    
             const pathY = vibes.environment.getPathY(bike.x);
             if (bike.y >= pathY) {
                 bike.y = pathY;
@@ -136,6 +144,4 @@ document.addEventListener('DOMContentLoaded', async () => {
         bike.rotationSpeed = (event.gamma / 90) * 2 * Math.PI;
     });
 
-    // Start the game loop
-    requestAnimationFrame(gameLoop);
 });
