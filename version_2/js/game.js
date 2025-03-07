@@ -1,5 +1,6 @@
 // game.js
 import { drawBike } from './drawbike.js';
+import { drawRider } from './drawrider.js';
 import { vibes } from './vibes.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -61,8 +62,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         // Update environment with bike's position
-        vibes.time = bike.x / vibes.environment.PIXELS_PER_DAY; // Assuming environment exposes PIXELS_PER_DAY
-        vibes.update(bike.x); // Pass bike.x to update ground
+        vibes.time = bike.x / vibes.environment.PIXELS_PER_DAY;
+        vibes.update(bike.x);
 
         renderBike();
         renderHUD();
@@ -111,7 +112,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         ctx.save();
         ctx.translate(canvas.width / 2, bike.y);
         ctx.rotate(bike.angle);
-        drawBike(ctx, bike.x);
+        const bikeData = drawBike(ctx, bike.x); // Capture bike data
+        drawRider(ctx, bikeData); // Draw rider with bike data
         ctx.restore();
     }
 
@@ -143,5 +145,4 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.addEventListener('deviceorientation', (event) => {
         bike.rotationSpeed = (event.gamma / 90) * 2 * Math.PI;
     });
-
 });
