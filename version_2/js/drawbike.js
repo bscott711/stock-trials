@@ -92,6 +92,45 @@ export function drawBike(ctx, distance_traveled, darknessLevel) {
         ctx.stroke();
     }
 
+    // Dust particles array
+    const dustParticles = [];
+
+    // Function to generate dust particles
+    function generateDust(x, y) {
+        for (let i = 0; i < 10; i++) {
+            const offsetX = Math.random() * 40 - 40; // Random offset along x-axis
+            const offsetY = Math.random() * 10; // Random offset along y-axis
+            const size = Math.random() * 2 + 1; // Random size between 1px and 3px
+            const opacity = Math.random() * 0.5 + 0.3; // Random opacity between 0.3 and 0.8
+            dustParticles.push({ x: x + offsetX, y: y + offsetY, size, opacity });
+        }
+    }
+
+    // Draw dust particles
+    function drawDust() {
+        ctx.fillStyle = "rgba(150, 100, 50, 0.5)"; // Dust color
+        dustParticles.forEach((particle, index) => {
+            ctx.beginPath();
+            ctx.arc(particle.x, particle.y, particle.size, 0, 2 * Math.PI);
+            ctx.fillStyle = `rgba(150, 100, 50, ${particle.opacity})`;
+            ctx.fill();
+
+            // Update particle position and fade out
+            particle.x -= 1 + Math.random() * 2; // Move left slightly
+            particle.y += 1 + Math.random() * 2; // Move down slightly
+            particle.opacity -= 0.01; // Fade out
+
+            // Remove particle if fully faded
+            if (particle.opacity <= 0) {
+                dustParticles.splice(index, 1);
+            }
+        });
+    }
+
+    // Generate dust for both wheels
+    generateDust(back_wheel_x - (r / 2), back_wheel_y + r); // Back wheel dust
+    generateDust(front_wheel_x - (r / 2), front_wheel_y + r); // Front wheel dust
+
     // Seat
     ctx.fillStyle = seatColor;
     ctx.beginPath();
@@ -171,76 +210,79 @@ export function drawBike(ctx, distance_traveled, darknessLevel) {
     ctx.stroke();
 
     // Headlight logic
-        const headlightIntensity = Math.min(1, darknessLevel); // Clamp intensity between 0 and 1
-        const headlightX = handlebar_x + 7; // Position the headlight at the handlebars
-        const headlightY = handlebar_y + 20; // Meets where the tube meets the handlebars
-        const headlightLength = 600; // Length of the cone (how far the light extends)
-        const headlightWidth = 80; // Width of the cone at its base
-        const coneAngle = 30;
-    
-        // Save the current context state
-        ctx.save();
-    
-        // Create a clipping path for the cone shape
-        ctx.beginPath();
-        ctx.moveTo(headlightX, headlightY); // Start at the headlight bulb
-        ctx.lineTo(
-            headlightX + headlightLength * Math.cos(coneAngle),
-            headlightY - headlightWidth / 2 * Math.sin(coneAngle)
-        ); // Top edge of the cone
-        ctx.lineTo(
-            headlightX + headlightLength * Math.cos(coneAngle),
-            headlightY + headlightWidth / 2 * Math.sin(coneAngle)
-        ); // Bottom edge of the cone
-        ctx.closePath(); // Close the triangle
-        ctx.clip(); // Clip everything outside the cone
-    
-        // Create a linear gradient for the cone
-        const gradient = ctx.createLinearGradient(
-            headlightX, headlightY, // Start of the gradient (at the bulb)
-            headlightX + headlightLength * Math.cos(coneAngle), headlightY // End of the gradient (end of the cone)
-        );
-    
-        // Define the gradient colors (bright near the bulb, fading to transparent)
-        gradient.addColorStop(0, `rgba(255, 255, 200, ${0.8 * headlightIntensity})`); // Bright center
-        gradient.addColorStop(0.5, `rgba(255, 255, 200, ${0.4 * headlightIntensity})`); // Mid-range glow
-        gradient.addColorStop(1, "rgba(255, 255, 200, 0)"); // Fully transparent edge
-    
-        // Draw the cone of light
-        ctx.globalCompositeOperation = "lighter"; // Blend mode for glowing effect
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.moveTo(headlightX, headlightY); // Start at the headlight bulb
-        ctx.lineTo(
-            headlightX + headlightLength * Math.cos(coneAngle),
-            headlightY - headlightWidth / 2 * Math.sin(coneAngle)
-        ); // Top edge of the cone
-        ctx.lineTo(
-            headlightX + headlightLength * Math.cos(coneAngle),
-            headlightY + headlightWidth / 2 * Math.sin(coneAngle)
-        ); // Bottom edge of the cone
-        ctx.closePath(); // Close the triangle
-        ctx.fill();
-    
-        // Restore the context state
-        ctx.restore();
-    
-        // Optionally, draw a small white circle to represent the headlight bulb
-        ctx.fillStyle = "#ffffff";
-        ctx.beginPath();
-        ctx.arc(headlightX, headlightY, 5, 0, 2 * Math.PI);
-        ctx.fill();
+    const headlightIntensity = Math.min(1, darknessLevel); // Clamp intensity between 0 and 1
+    const headlightX = handlebar_x + 7; // Position the headlight at the handlebars
+    const headlightY = handlebar_y + 20; // Meets where the tube meets the handlebars
+    const headlightLength = 600; // Length of the cone (how far the light extends)
+    const headlightWidth = 80; // Width of the cone at its base
+    const coneAngle = 30;
 
-        const bulbGradient = ctx.createRadialGradient(
-            headlightX, headlightY, 0,
-            headlightX, headlightY, 10
-        );
-        bulbGradient.addColorStop(0, `rgba(255, 255, 200, ${0.8 * headlightIntensity})`);
-        bulbGradient.addColorStop(1, "rgba(255, 255, 200, 0)");
-        ctx.fillStyle = bulbGradient;
-        ctx.beginPath();
-        ctx.arc(headlightX, headlightY, 10, 0, 2 * Math.PI);
-        ctx.fill();
+    // Save the current context state
+    ctx.save();
+
+    // Create a clipping path for the cone shape
+    ctx.beginPath();
+    ctx.moveTo(headlightX, headlightY); // Start at the headlight bulb
+    ctx.lineTo(
+        headlightX + headlightLength * Math.cos(coneAngle),
+        headlightY - headlightWidth / 2 * Math.sin(coneAngle)
+    ); // Top edge of the cone
+    ctx.lineTo(
+        headlightX + headlightLength * Math.cos(coneAngle),
+        headlightY + headlightWidth / 2 * Math.sin(coneAngle)
+    ); // Bottom edge of the cone
+    ctx.closePath(); // Close the triangle
+    ctx.clip(); // Clip everything outside the cone
+
+    // Create a linear gradient for the cone
+    const gradient = ctx.createLinearGradient(
+        headlightX, headlightY, // Start of the gradient (at the bulb)
+        headlightX + headlightLength * Math.cos(coneAngle), headlightY // End of the gradient (end of the cone)
+    );
+
+    // Define the gradient colors (bright near the bulb, fading to transparent)
+    gradient.addColorStop(0, `rgba(255, 255, 200, ${0.8 * headlightIntensity})`); // Bright center
+    gradient.addColorStop(0.5, `rgba(255, 255, 200, ${0.4 * headlightIntensity})`); // Mid-range glow
+    gradient.addColorStop(1, "rgba(255, 255, 200, 0)"); // Fully transparent edge
+
+    // Draw the cone of light
+    ctx.globalCompositeOperation = "lighter"; // Blend mode for glowing effect
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.moveTo(headlightX, headlightY); // Start at the headlight bulb
+    ctx.lineTo(
+        headlightX + headlightLength * Math.cos(coneAngle),
+        headlightY - headlightWidth / 2 * Math.sin(coneAngle)
+    ); // Top edge of the cone
+    ctx.lineTo(
+        headlightX + headlightLength * Math.cos(coneAngle),
+        headlightY + headlightWidth / 2 * Math.sin(coneAngle)
+    ); // Bottom edge of the cone
+    ctx.closePath(); // Close the triangle
+    ctx.fill();
+
+    // Restore the context state
+    ctx.restore();
+
+    // Optionally, draw a small white circle to represent the headlight bulb
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.arc(headlightX, headlightY, 5, 0, 2 * Math.PI);
+    ctx.fill();
+
+    const bulbGradient = ctx.createRadialGradient(
+        headlightX, headlightY, 0,
+        headlightX, headlightY, 10
+    );
+    bulbGradient.addColorStop(0, `rgba(255, 255, 200, ${0.8 * headlightIntensity})`);
+    bulbGradient.addColorStop(1, "rgba(255, 255, 200, 0)");
+    ctx.fillStyle = bulbGradient;
+    ctx.beginPath();
+    ctx.arc(headlightX, headlightY, 10, 0, 2 * Math.PI);
+    ctx.fill();
+
+    // Draw dust particles
+    drawDust();
 
     // Return rider attachment points
     return {
