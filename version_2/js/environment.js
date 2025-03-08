@@ -13,6 +13,12 @@ export class Environment {
     this.initializeClouds();
     this.initializeStars();
     this.addons = null;
+
+    // Off-screen canvas for grass texture
+    this.grassCanvas = document.createElement('canvas');
+    this.grassCanvas.width = this.canvas.width * 2; // Double width for seamless scrolling
+    this.grassCanvas.height = this.canvas.height;
+    this.grassCtx = this.grassCanvas.getContext('2d');
   }
 
   async initializeGround() {
@@ -20,6 +26,9 @@ export class Environment {
     this.generateSamplePath();
     this.addons = new TerrainAddons(this.getPathY.bind(this), this.ctx);
     this.addons.initializeAddons();
+
+    // Pre-render the grass texture
+    this.preRenderGrass();
   }
 
   generateSamplePath() {
@@ -101,6 +110,68 @@ export class Environment {
     return (y2 - y1) / (x2 - x1);
   }
 
+  preRenderGrass() {
+    const step = 5; // Blade spacing
+    const grassBuffer = 2; // Buffer to ensure grass is below the path
+  
+    // Generate an extended path for the off-screen canvas width
+    const worldStartX = 0; // Starting world coordinate for the grass texture
+    const worldEndX = this.grassCanvas.width; // Ending world coordinate for the grass texture
+    const startX = worldStartX;
+    const endX = worldEndX;
+  
+    let startIndex = Math.max(0, Math.floor(startX / this.PIXELS_PER_DAY));
+    let endIndex = Math.ceil(endX / this.PIXELS_PER_DAY);
+  
+    const extendedPath = [];
+    for (let i = startIndex; i <= endIndex; i++) {
+      const wx = i * this.PIXELS_PER_DAY;
+      if (i < this.path.length) {
+        extendedPath.push(this.path[i]);
+      } else {
+        const y = this.getPathY(wx);
+        extendedPath.push([wx, y]);
+      }
+    }
+  
+    // Pre-render grass based on the extended path
+    for (let i = 0; i < extendedPath.length - 1; i++) {
+      const [wx1, wy1] = extendedPath[i];
+      const [wx2, wy2] = extendedPath[i + 1];
+  
+      // Calculate the number of steps between wx1 and wx2
+      const segmentLength = wx2 - wx1;
+      const numSteps = Math.ceil(segmentLength / step);
+  
+      for (let s = 0; s < numSteps; s++) {
+        const t = s / numSteps; // Interpolation factor
+        const x = wx1 + t * segmentLength; // World X-coordinate
+        const pathY = wy1 + t * (wy2 - wy1); // Interpolated path Y-coordinate
+  
+        // Map world X to local canvas X
+        const localX = x - worldStartX;
+  
+        // Randomly place grass blades strictly below the pathY
+        const bladeY = pathY + grassBuffer + Math.random() * (this.canvas.height - pathY - grassBuffer);
+        const grassHeight = 10 + Math.random() * 5; // 10-15px
+        const angle = Math.PI / 6 + Math.random() * Math.PI / 6; // 30-60°
+  
+        const greenShade = Math.floor(100 + Math.random() * 100); // 100-200
+        this.grassCtx.strokeStyle = `rgb(0, ${greenShade}, 0)`;
+        this.grassCtx.lineWidth = 1;
+  
+        // Draw the grass blade
+        this.grassCtx.beginPath();
+        this.grassCtx.moveTo(localX, bladeY);
+        this.grassCtx.lineTo(
+          localX + grassHeight * Math.cos(angle),
+          bladeY - grassHeight * Math.sin(angle)
+        );
+        this.grassCtx.stroke();
+      }
+    }
+  }
+
   drawGround(bikeX) {
     if (this.path.length === 0) return;
     const startX = bikeX - this.canvas.width / 2;
@@ -120,6 +191,7 @@ export class Environment {
       }
     }
 
+    // Base ground fill
     this.ctx.beginPath();
     this.ctx.moveTo(0, this.canvas.height);
     extendedPath.forEach(([wx, wy]) => {
@@ -127,9 +199,10 @@ export class Environment {
     });
     this.ctx.lineTo(this.canvas.width, this.canvas.height);
     this.ctx.closePath();
-    this.ctx.fillStyle = '#32CD32';
+    this.ctx.fillStyle = '#32CD32'; // Lime green
     this.ctx.fill();
 
+    // Path outline
     this.ctx.beginPath();
     for (let i = 0; i < extendedPath.length - 1; i++) {
       const [wx1, wy1] = extendedPath[i];
@@ -140,6 +213,11 @@ export class Environment {
     this.ctx.strokeStyle = 'black';
     this.ctx.lineWidth = 2;
     this.ctx.stroke();
+
+    // Draw pre-rendered grass texture
+    const offsetX = startX % this.grassCanvas.width; // Offset for seamless scrolling
+    this.ctx.drawImage(this.grassCanvas, -offsetX, 0); // First copy
+    this.ctx.drawImage(this.grassCanvas, this.grassCanvas.width - offsetX, 0); // Second copy
   }
 
   initializeStars() {
@@ -547,14 +625,14 @@ export class Environment {
     const t = (this.time % this.cycleDuration) / this.cycleDuration;
     let darknessLevel;
     if (t >= 0.65 && t < 0.7) {
-        darknessLevel = (t - 0.65) / 0.05; // Transition to night
+      darknessLevel = (t - 0.65) / 0.05; // Transition to night
     } else if (t >= 0.7 && t < 0.95) {
-        darknessLevel = 1; // Fully dark
+      darknessLevel = 1; // Fully dark
     } else if (t >= 0.95 && t < 1) {
-        darknessLevel = 1 - ((t - 0.95) / 0.05); // Transition to day
+      darknessLevel = 1 - ((t - 0.95) / 0.05); // Transition to day
     } else {
-        darknessLevel = 0; // Daytime
+      darknessLevel = 0; // Daytime
     }
     return darknessLevel;
-}
+  }
 }
