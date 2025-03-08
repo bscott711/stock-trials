@@ -78,7 +78,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function updateBike(deltaTime) {
         if (gameOver) return;
         bike.x += BIKE_SPEED * deltaTime;
-    
+
         if (bike.state === 'on_ground') {
             bike.y = vibes.environment.getPathY(bike.x);
             bike.angle = Math.atan(vibes.environment.getPathSlope(bike.x));
@@ -87,10 +87,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             bike.y += bike.v_y * deltaTime;
             bike.angle += bike.rotationSpeed * deltaTime;
             bike.totalRotation += bike.rotationSpeed * deltaTime;
-    
+
             // Clamp y to stay on screen
             bike.y = Math.min(canvas.height, Math.max(0, bike.y));
-    
+
             const pathY = vibes.environment.getPathY(bike.x);
             if (bike.y >= pathY) {
                 bike.y = pathY;
@@ -112,8 +112,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         ctx.save();
         ctx.translate(canvas.width / 2, bike.y);
         ctx.rotate(bike.angle);
-        const bikeData = drawBike(ctx, bike.x); // Capture bike data
+
+        // Determine if it's nighttime or calculate darkness level
+        const darknessLevel = vibes.environment.getDarknessLevel();
+
+        // Pass the darknessLevel to drawBike
+        const bikeData = drawBike(ctx, bike.x, darknessLevel); // Capture bike data
         drawRider(ctx, bikeData); // Draw rider with bike data
+
         ctx.restore();
     }
 

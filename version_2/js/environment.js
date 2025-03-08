@@ -522,7 +522,7 @@ export class Environment {
   }
 
   newDay() {
-    this.cloudFreeDays = 0; //Math.random() > 0.5
+    this.cloudFreeDays = Math.random() > 0.5;
   }
 
   update(bikeX = 0) {
@@ -541,6 +541,20 @@ export class Environment {
     this.drawClouds();
     this.addons.draw(this.ctx, bikeX); // Add rocks, trees, mountain, beach after ground
     this.drawGround(bikeX);
-
   }
+
+  getDarknessLevel() {
+    const t = (this.time % this.cycleDuration) / this.cycleDuration;
+    let darknessLevel;
+    if (t >= 0.65 && t < 0.7) {
+        darknessLevel = (t - 0.65) / 0.05; // Transition to night
+    } else if (t >= 0.7 && t < 0.95) {
+        darknessLevel = 1; // Fully dark
+    } else if (t >= 0.95 && t < 1) {
+        darknessLevel = 1 - ((t - 0.95) / 0.05); // Transition to day
+    } else {
+        darknessLevel = 0; // Daytime
+    }
+    return darknessLevel;
+}
 }
