@@ -1,4 +1,6 @@
 // drawbike.js
+const dustParticles = []; // Persist across frames
+
 export function drawBike(ctx, distance_traveled, darknessLevel) {
     // Bike parameters
     const r = 30; // Wheel radius
@@ -92,13 +94,12 @@ export function drawBike(ctx, distance_traveled, darknessLevel) {
         ctx.stroke();
     }
 
-    // Dust particles array
-    const dustParticles = [];
+
 
     // Function to generate dust particles
     function generateDust(x, y) {
         for (let i = 0; i < 10; i++) {
-            const offsetX = Math.random() * 40 - 40; // Random offset along x-axis
+            const offsetX = Math.random() * 30 - 10; // Random offset along x-axis
             const offsetY = Math.random() * 10; // Random offset along y-axis
             const size = Math.random() * 2 + 1; // Random size between 1px and 3px
             const opacity = Math.random() * 0.5 + 0.3; // Random opacity between 0.3 and 0.8
@@ -117,8 +118,8 @@ export function drawBike(ctx, distance_traveled, darknessLevel) {
 
             // Update particle position and fade out
             particle.x -= 1 + Math.random() * 2; // Move left slightly
-            particle.y += 1 + Math.random() * 2; // Move down slightly
-            particle.opacity -= 0.01; // Fade out
+            particle.y -= 0.01 + Math.random() * 2; // Move up slightly
+            particle.opacity -= 0.015; // Fade out
 
             // Remove particle if fully faded
             if (particle.opacity <= 0) {
