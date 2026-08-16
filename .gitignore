@@ -8,3 +8,6 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Derived audio: regenerate from music_assets/ with tools/transcode_music.sh
+version_2/music_assets_web/

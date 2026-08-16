@@ -214,56 +214,43 @@ export function drawBike(ctx, distance_traveled, darknessLevel) {
     const headlightIntensity = Math.min(1, darknessLevel); // Clamp intensity between 0 and 1
     const headlightX = handlebar_x + 7; // Position the headlight at the handlebars
     const headlightY = handlebar_y + 20; // Meets where the tube meets the handlebars
-    const headlightLength = 600; // Length of the cone (how far the light extends)
-    const headlightWidth = 80; // Width of the cone at its base
-    const coneAngle = 30;
+    const headlightLength = 520; // How far the light reaches
+    // Math.cos/sin take RADIANS. This was `30`, i.e. 30 radians: cos(30)=0.154
+    // and sin(30)=-0.988, so the cone rendered 80px long with its top and
+    // bottom edges swapped - an inside-out sliver rather than a beam.
+    const CONE_HALF_ANGLE = Math.PI / 13;
+    const spread = headlightLength * Math.tan(CONE_HALF_ANGLE);
 
-    // Save the current context state
-    ctx.save();
+    if (headlightIntensity > 0.01) {
+        ctx.save();
 
-    // Create a clipping path for the cone shape
-    ctx.beginPath();
-    ctx.moveTo(headlightX, headlightY); // Start at the headlight bulb
-    ctx.lineTo(
-        headlightX + headlightLength * Math.cos(coneAngle),
-        headlightY - headlightWidth / 2 * Math.sin(coneAngle)
-    ); // Top edge of the cone
-    ctx.lineTo(
-        headlightX + headlightLength * Math.cos(coneAngle),
-        headlightY + headlightWidth / 2 * Math.sin(coneAngle)
-    ); // Bottom edge of the cone
-    ctx.closePath(); // Close the triangle
-    ctx.clip(); // Clip everything outside the cone
+        // Cone geometry, used for both the clip and the fill.
+        const cone = () => {
+            ctx.beginPath();
+            ctx.moveTo(headlightX, headlightY);
+            ctx.lineTo(headlightX + headlightLength, headlightY - spread);
+            ctx.lineTo(headlightX + headlightLength, headlightY + spread);
+            ctx.closePath();
+        };
 
-    // Create a linear gradient for the cone
-    const gradient = ctx.createLinearGradient(
-        headlightX, headlightY, // Start of the gradient (at the bulb)
-        headlightX + headlightLength * Math.cos(coneAngle), headlightY // End of the gradient (end of the cone)
-    );
+        cone();
+        ctx.clip();
 
-    // Define the gradient colors (bright near the bulb, fading to transparent)
-    gradient.addColorStop(0, `rgba(255, 255, 200, ${0.8 * headlightIntensity})`); // Bright center
-    gradient.addColorStop(0.5, `rgba(255, 255, 200, ${0.4 * headlightIntensity})`); // Mid-range glow
-    gradient.addColorStop(1, "rgba(255, 255, 200, 0)"); // Fully transparent edge
+        const gradient = ctx.createLinearGradient(
+            headlightX, headlightY,
+            headlightX + headlightLength, headlightY,
+        );
+        gradient.addColorStop(0, `rgba(255, 250, 205, ${0.55 * headlightIntensity})`);
+        gradient.addColorStop(0.45, `rgba(255, 250, 205, ${0.22 * headlightIntensity})`);
+        gradient.addColorStop(1, 'rgba(255, 250, 205, 0)');
 
-    // Draw the cone of light
-    ctx.globalCompositeOperation = "lighter"; // Blend mode for glowing effect
-    ctx.fillStyle = gradient;
-    ctx.beginPath();
-    ctx.moveTo(headlightX, headlightY); // Start at the headlight bulb
-    ctx.lineTo(
-        headlightX + headlightLength * Math.cos(coneAngle),
-        headlightY - headlightWidth / 2 * Math.sin(coneAngle)
-    ); // Top edge of the cone
-    ctx.lineTo(
-        headlightX + headlightLength * Math.cos(coneAngle),
-        headlightY + headlightWidth / 2 * Math.sin(coneAngle)
-    ); // Bottom edge of the cone
-    ctx.closePath(); // Close the triangle
-    ctx.fill();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = gradient;
+        cone();
+        ctx.fill();
 
-    // Restore the context state
-    ctx.restore();
+        ctx.restore();
+    }
 
     // Optionally, draw a small white circle to represent the headlight bulb
     ctx.fillStyle = "#ffffff";
