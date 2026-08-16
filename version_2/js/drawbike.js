@@ -1,136 +1,85 @@
-// drawbike.js
-const dustParticles = []; // Persist across frames
+// Procedural fallback for the bike rig (frame/seat/pedals/wheels/headlight),
+// used by render/playerSprite.js piece-by-piece whenever the matching sprite
+// hasn't been generated yet (see assets/sprites/PROMPTS.md). computeRig() is
+// the single source of truth for the bike's geometry - render/playerSprite.js
+// and js/drawrider.js both consume its output rather than re-deriving it.
 
-export function drawBike(ctx, distance_traveled, darknessLevel) {
-    // Bike parameters
-    const r = 30; // Wheel radius
-    const d = 100; // Wheelbase
-    const h = 75; // Seat height
-    const k = 100; // Handlebar height
-    const crank_length = 12; // Crank arms
+export const WHEEL_R = 30; // wheel radius
+const WHEELBASE = 100;
+const SEAT_HEIGHT = 75;
+const HANDLEBAR_HEIGHT = 100;
+const CRANK_LENGTH = 12;
 
-    // Animation
-    const wheel_angle = (distance_traveled / r) % (2 * Math.PI);
+export function computeRig(distanceTraveled) {
+    const wheel_angle = (distanceTraveled / WHEEL_R) % (2 * Math.PI);
     const pedal_angle = wheel_angle;
 
-    // Positions
-    const back_wheel_x = -d / 2;
+    const back_wheel_x = -WHEELBASE / 2;
     const back_wheel_y = 0;
-    const front_wheel_x = d / 2;
+    const front_wheel_x = WHEELBASE / 2;
     const front_wheel_y = 0;
-    const seat_x = -d * 0.2; // Centered seat
-    const seat_y = -h;
+    const seat_x = -WHEELBASE * 0.2; // centered seat
+    const seat_y = -SEAT_HEIGHT;
     const handlebar_x = front_wheel_x * 0.8;
-    const handlebar_y = -k;
+    const handlebar_y = -HANDLEBAR_HEIGHT;
     const crank_center_x = 0;
     const crank_center_y = -15;
 
-    // Colors
-    const frameColor = "#0057b7";
-    const wheelColor = "#57b799";
-    const tireColor = "#333";
-    const spokesColor = "#999";
-    const seatColor = "#663300";
-    const pedalColor = "#555";
+    const pedal_x = crank_center_x + CRANK_LENGTH * Math.cos(pedal_angle);
+    const pedal_y = crank_center_y + CRANK_LENGTH * Math.sin(pedal_angle);
+    const pedal_x2 = crank_center_x - CRANK_LENGTH * Math.cos(pedal_angle);
+    const pedal_y2 = crank_center_y - CRANK_LENGTH * Math.sin(pedal_angle);
 
-    // Wheels
-    // Back wheel
-    ctx.strokeStyle = tireColor;
+    return {
+        wheel_angle, pedal_angle,
+        back_wheel_x, back_wheel_y, front_wheel_x, front_wheel_y,
+        seat_x, seat_y, handlebar_x, handlebar_y,
+        crank_center_x, crank_center_y,
+        pedal_x, pedal_y, pedal_x2, pedal_y2,
+    };
+}
+
+export function drawProceduralWheel(ctx, x, y, wheelAngle) {
+    const r = WHEEL_R;
+
+    ctx.strokeStyle = '#333';
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.arc(back_wheel_x, back_wheel_y, r, 0, 2 * Math.PI);
+    ctx.arc(x, y, r, 0, 2 * Math.PI);
     ctx.stroke();
 
-    ctx.strokeStyle = wheelColor;
+    ctx.strokeStyle = '#57b799';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.arc(back_wheel_x, back_wheel_y, r - 2, 0, 2 * Math.PI);
+    ctx.arc(x, y, r - 2, 0, 2 * Math.PI);
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.arc(back_wheel_x, back_wheel_y, 2, 0, 2 * Math.PI);
+    ctx.arc(x, y, 2, 0, 2 * Math.PI);
     ctx.fill();
 
-    ctx.strokeStyle = spokesColor;
+    ctx.strokeStyle = '#999';
     ctx.lineWidth = 0.5;
     for (let i = 0; i < 8; i++) {
-        const angle = wheel_angle + (i * Math.PI) / 4;
+        const angle = wheelAngle + (i * Math.PI) / 4;
         ctx.beginPath();
-        ctx.moveTo(back_wheel_x, back_wheel_y);
-        ctx.lineTo(
-            back_wheel_x + (r - 2) * Math.cos(angle),
-            back_wheel_y + (r - 2) * Math.sin(angle)
-        );
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + (r - 2) * Math.cos(angle), y + (r - 2) * Math.sin(angle));
         ctx.stroke();
     }
+}
 
-    // Front wheel
-    ctx.strokeStyle = tireColor;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(front_wheel_x, front_wheel_y, r, 0, 2 * Math.PI);
-    ctx.stroke();
+export function drawBikeFrame(ctx, rig) {
+    const {
+        seat_x, seat_y, handlebar_x, handlebar_y,
+        crank_center_x, crank_center_y,
+        pedal_x, pedal_y, pedal_x2, pedal_y2, pedal_angle,
+        back_wheel_x, back_wheel_y, front_wheel_x, front_wheel_y,
+    } = rig;
 
-    ctx.strokeStyle = wheelColor;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(front_wheel_x, front_wheel_y, r - 2, 0, 2 * Math.PI);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(front_wheel_x, front_wheel_y, 2, 0, 2 * Math.PI);
-    ctx.fill();
-
-    ctx.strokeStyle = spokesColor;
-    ctx.lineWidth = 0.5;
-    for (let i = 0; i < 8; i++) {
-        const angle = wheel_angle + (i * Math.PI) / 4;
-        ctx.beginPath();
-        ctx.moveTo(front_wheel_x, front_wheel_y);
-        ctx.lineTo(
-            front_wheel_x + (r - 2) * Math.cos(angle),
-            front_wheel_y + (r - 2) * Math.sin(angle)
-        );
-        ctx.stroke();
-    }
-
-
-
-    // Function to generate dust particles
-    function generateDust(x, y) {
-        for (let i = 0; i < 10; i++) {
-            const offsetX = Math.random() * 30 - 10; // Random offset along x-axis
-            const offsetY = Math.random() * 10; // Random offset along y-axis
-            const size = Math.random() * 2 + 1; // Random size between 1px and 3px
-            const opacity = Math.random() * 0.5 + 0.3; // Random opacity between 0.3 and 0.8
-            dustParticles.push({ x: x + offsetX, y: y + offsetY, size, opacity });
-        }
-    }
-
-    // Draw dust particles
-    function drawDust() {
-        ctx.fillStyle = "rgba(150, 100, 50, 0.5)"; // Dust color
-        dustParticles.forEach((particle, index) => {
-            ctx.beginPath();
-            ctx.arc(particle.x, particle.y, particle.size, 0, 2 * Math.PI);
-            ctx.fillStyle = `rgba(150, 100, 50, ${particle.opacity})`;
-            ctx.fill();
-
-            // Update particle position and fade out
-            particle.x -= 1 + Math.random() * 2; // Move left slightly
-            particle.y -= 0.01 + Math.random() * 2; // Move up slightly
-            particle.opacity -= 0.015; // Fade out
-
-            // Remove particle if fully faded
-            if (particle.opacity <= 0) {
-                dustParticles.splice(index, 1);
-            }
-        });
-    }
-
-    // Generate dust for both wheels
-    generateDust(back_wheel_x - (r / 2), back_wheel_y + r); // Back wheel dust
-    generateDust(front_wheel_x - (r / 2), front_wheel_y + r); // Front wheel dust
+    const frameColor = '#0057b7';
+    const seatColor = '#663300';
+    const pedalColor = '#555';
 
     // Seat
     ctx.fillStyle = seatColor;
@@ -139,7 +88,7 @@ export function drawBike(ctx, distance_traveled, darknessLevel) {
     ctx.fill();
 
     // Handlebars
-    ctx.strokeStyle = "#333";
+    ctx.strokeStyle = '#333';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(handlebar_x - 8, handlebar_y);
@@ -147,21 +96,21 @@ export function drawBike(ctx, distance_traveled, darknessLevel) {
     ctx.stroke();
 
     // Pedal cranks
-    ctx.strokeStyle = "#555";
+    ctx.strokeStyle = '#555';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(crank_center_x, crank_center_y);
     ctx.lineTo(
-        crank_center_x + crank_length * Math.cos(pedal_angle),
-        crank_center_y + crank_length * Math.sin(pedal_angle)
+        crank_center_x + CRANK_LENGTH * Math.cos(pedal_angle),
+        crank_center_y + CRANK_LENGTH * Math.sin(pedal_angle),
     );
     ctx.stroke();
 
     ctx.beginPath();
     ctx.moveTo(crank_center_x, crank_center_y);
     ctx.lineTo(
-        crank_center_x + crank_length * -Math.cos(pedal_angle),
-        crank_center_y + crank_length * -Math.sin(pedal_angle)
+        crank_center_x + CRANK_LENGTH * -Math.cos(pedal_angle),
+        crank_center_y + CRANK_LENGTH * -Math.sin(pedal_angle),
     );
     ctx.stroke();
 
@@ -171,20 +120,18 @@ export function drawBike(ctx, distance_traveled, darknessLevel) {
     ctx.stroke();
 
     // Pedals
-    const pedal_x = crank_center_x + crank_length * Math.cos(pedal_angle);
-    const pedal_y = crank_center_y + crank_length * Math.sin(pedal_angle);
     ctx.fillStyle = pedalColor;
     ctx.beginPath();
     ctx.rect(pedal_x - 4, pedal_y - 1, 8, 2);
     ctx.fill();
 
-    const pedal_x2 = crank_center_x + crank_length * -Math.cos(pedal_angle);
-    const pedal_y2 = crank_center_y + crank_length * -Math.sin(pedal_angle);
     ctx.beginPath();
     ctx.rect(pedal_x2 - 4, pedal_y2 - 1, 8, 2);
     ctx.fill();
 
     // Chain
+    ctx.strokeStyle = '#555';
+    ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(back_wheel_x, back_wheel_y);
     ctx.lineTo(crank_center_x, crank_center_y);
@@ -209,22 +156,19 @@ export function drawBike(ctx, distance_traveled, darknessLevel) {
     ctx.moveTo(back_wheel_x, back_wheel_y);
     ctx.lineTo(seat_x, seat_y);
     ctx.stroke();
+}
 
-    // Headlight logic
-    const headlightIntensity = Math.min(1, darknessLevel); // Clamp intensity between 0 and 1
-    const headlightX = handlebar_x + 7; // Position the headlight at the handlebars
-    const headlightY = handlebar_y + 20; // Meets where the tube meets the handlebars
-    const headlightLength = 520; // How far the light reaches
-    // Math.cos/sin take RADIANS. This was `30`, i.e. 30 radians: cos(30)=0.154
-    // and sin(30)=-0.988, so the cone rendered 80px long with its top and
-    // bottom edges swapped - an inside-out sliver rather than a beam.
+export function drawHeadlight(ctx, rig, darknessLevel) {
+    const headlightIntensity = Math.min(1, darknessLevel);
+    const headlightX = rig.handlebar_x + 7; // meets the handlebars
+    const headlightY = rig.handlebar_y + 20; // meets where the tube meets the handlebars
+    const headlightLength = 520; // how far the light reaches
     const CONE_HALF_ANGLE = Math.PI / 13;
     const spread = headlightLength * Math.tan(CONE_HALF_ANGLE);
 
     if (headlightIntensity > 0.01) {
         ctx.save();
 
-        // Cone geometry, used for both the clip and the fill.
         const cone = () => {
             ctx.beginPath();
             ctx.moveTo(headlightX, headlightY);
@@ -252,36 +196,20 @@ export function drawBike(ctx, distance_traveled, darknessLevel) {
         ctx.restore();
     }
 
-    // Optionally, draw a small white circle to represent the headlight bulb
-    ctx.fillStyle = "#ffffff";
+    // Headlight bulb housing, visible whether lit or not.
+    ctx.fillStyle = '#ffffff';
     ctx.beginPath();
     ctx.arc(headlightX, headlightY, 5, 0, 2 * Math.PI);
     ctx.fill();
 
     const bulbGradient = ctx.createRadialGradient(
         headlightX, headlightY, 0,
-        headlightX, headlightY, 10
+        headlightX, headlightY, 10,
     );
     bulbGradient.addColorStop(0, `rgba(255, 255, 200, ${0.8 * headlightIntensity})`);
-    bulbGradient.addColorStop(1, "rgba(255, 255, 200, 0)");
+    bulbGradient.addColorStop(1, 'rgba(255, 255, 200, 0)');
     ctx.fillStyle = bulbGradient;
     ctx.beginPath();
     ctx.arc(headlightX, headlightY, 10, 0, 2 * Math.PI);
     ctx.fill();
-
-    // Draw dust particles
-    drawDust();
-
-    // Return rider attachment points
-    return {
-        seat_x,
-        seat_y,
-        handlebar_x,
-        handlebar_y,
-        pedal_x,
-        pedal_y,
-        pedal_x2,
-        pedal_y2,
-        pedal_angle,
-    };
 }

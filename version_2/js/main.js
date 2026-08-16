@@ -10,8 +10,9 @@ import { Parallax } from './render/parallax.js';
 import { DebugOverlay } from './render/debug.js';
 import { Bike } from './game/bike.js';
 import { Audio } from './game/audio.js';
-import { drawBike } from './drawbike.js';
-import { drawRider } from './drawrider.js';
+import { loadAssets } from './render/assets.js';
+import { SPRITE_MANIFEST } from './render/spriteManifest.js';
+import { drawPlayer } from './render/playerSprite.js';
 
 // Entry point. Constructs, owns the loop, dispatches. If this file starts
 // growing game logic, that logic belongs in game/ or render/ instead.
@@ -55,7 +56,14 @@ async function main() {
         console.error('Audio init failed, continuing without music:', err);
     }
 
+    // Not awaited: every sprite consumer falls back to its procedural draw
+    // via getSprite() returning null, so the game is correct on frame 1
+    // even before any art has loaded (or if a sprite was never generated).
+    loadAssets(SPRITE_MANIFEST);
+
     let score = 0;
+    let wasAirborne = false;
+    let justLanded = false; // one-shot edge for the landing dust burst; cleared after render() reads it
 
     // --- controls overlay ------------------------------------------------
     // Shown at startup (paused) so the controls are never a mystery, and
@@ -112,6 +120,9 @@ async function main() {
             if (input.pressed('mute')) audio.toggleMute();
 
             bike.update(dt, input);
+            if (wasAirborne && !bike.airborne) justLanded = true;
+            wasAirborne = bike.airborne;
+
             // One sun-and-moon arc == one trading day, so the celestials and
             // the day counter are the same clock by construction.
             sky.update(dt, terrain.dayAt(bike.x), terrain.dayFraction(bike.x));
@@ -132,15 +143,15 @@ async function main() {
 
         render() {
             renderer.draw({
-                camera, sky, terrain, scenery, parallax, debug,
+                camera, sky, terrain, scenery, parallax, debug, seed,
 
                 drawPlayfield(ctx, darkness) {
                     ctx.save();
                     ctx.translate(bike.x, bike.y);
                     ctx.rotate(bike.angle);
-                    const rig = drawBike(ctx, bike.distance, darkness);
-                    drawRider(ctx, rig);
+                    drawPlayer(ctx, { distance: bike.distance, darkness, airborne: bike.airborne, justLanded });
                     ctx.restore();
+                    justLanded = false;
                 },
 
                 drawHud(ctx, w, h) {

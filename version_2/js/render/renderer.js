@@ -29,7 +29,7 @@ export class Renderer {
         if (sky) sky.resize(this.cssW, this.cssH);
     }
 
-    draw({ camera, sky, terrain, scenery, parallax, drawPlayfield, drawHud, debug }) {
+    draw({ camera, sky, terrain, scenery, parallax, drawPlayfield, drawHud, debug, seed }) {
         const ctx = this.ctx;
         const darkness = sky.getDarkness();
 
@@ -41,12 +41,12 @@ export class Renderer {
         sky.draw(ctx, this.cssW, this.cssH);
 
         // 2. Distant silhouettes.
-        parallax.draw(ctx, camera, sky.horizonColor());
+        parallax.draw(ctx, camera, sky.horizonColor(), seed);
 
         // 3. Playfield ground and scenery.
         const bounds = camera.visibleBounds(120);
         camera.applyTo(ctx);
-        drawGround(ctx, terrain, bounds);
+        drawGround(ctx, terrain, bounds, seed);
         scenery.draw(ctx, bounds);
 
         // 4. Night pass. Order is the whole trick: darken the world FIRST, then
