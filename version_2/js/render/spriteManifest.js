@@ -7,10 +7,32 @@
 
 const BASE = './assets/sprites';
 
+// Legs pedal in a circle - a single static image (or one image rotated,
+// the trick that works for the wheels) can't fake that, so they get their
+// own cycle of pose frames instead, indexed by rig.pedal_angle. 8 frames
+// is a smooth-reading compromise between motion quality and how much art
+// has to be generated and kept consistent (see PROMPTS.md).
+export const PLAYER_LEG_FRAME_COUNT = 8;
+export const PLAYER_LEG_FRAMES = Array.from(
+    { length: PLAYER_LEG_FRAME_COUNT },
+    (_, i) => `player.legs${i}`,
+);
+
+// Torso sways slightly with each pedal stroke rather than sitting frozen -
+// same idea as the legs, just a coarser cycle since the motion is subtler.
+export const PLAYER_TORSO_FRAME_COUNT = 4;
+export const PLAYER_TORSO_FRAMES = Array.from(
+    { length: PLAYER_TORSO_FRAME_COUNT },
+    (_, i) => `player.torso${i}`,
+);
+
 export const SPRITE_MANIFEST = [
     { id: 'player.bikeRider', path: `${BASE}/player/bike-rider.png` },
+    { id: 'player.frame', path: `${BASE}/player/frame.png` },
     { id: 'player.wheelFront', path: `${BASE}/player/wheel-front.png` },
     { id: 'player.wheelBack', path: `${BASE}/player/wheel-back.png` },
+    ...PLAYER_LEG_FRAMES.map((id, i) => ({ id, path: `${BASE}/player/legs-${i}.png` })),
+    ...PLAYER_TORSO_FRAMES.map((id, i) => ({ id, path: `${BASE}/player/torso-${i}.png` })),
 
     { id: 'woods.pineTree', path: `${BASE}/woods/pine-tree.png` },
     { id: 'woods.fallenLog', path: `${BASE}/woods/fallen-log.png` },

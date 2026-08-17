@@ -1,0 +1,19 @@
+{
+  "legs": {
+    "count": 8,
+    "anchor_px": [
+      13.2,
+      4.0
+    ]
+  },
+  "torso": {
+    "count": 4,
+    "anchor_px": [
+      24.4,
+      84.0
+    ]
+  },
+  "wheel": {
+    "count": 2
+  }
+}
