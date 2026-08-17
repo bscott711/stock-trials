@@ -1,0 +1,100 @@
+name: Deploy to stocktrials.duckdns.org
+
+# Mirrors tools/deploy.sh, run automatically instead of by hand. The app
+# (HTML/CSS/JS/sprites) syncs on every push - that's the fast path almost
+# every push takes. music_assets/ is stored in git-lfs and only becomes
+# real audio after tools/transcode_music.sh runs, which needs ffmpeg and an
+# lfs pull, so that step (and the audio rsync after it) only runs when a
+# push actually touches version_2/music_assets/, or when triggered by hand.
+on:
+  push:
+    branches: [main]
+    paths: ["version_2/**"]
+  workflow_dispatch:
+    inputs:
+      force_music:
+        description: "Re-transcode and sync music_assets even if unchanged"
+        type: boolean
+        default: false
+
+concurrency:
+  group: deploy-stocktrials
+  cancel-in-progress: false
+
+env:
+  # Host/user/path aren't secret (the hostname is the public site URL) - only
+  # the private key itself needs to live in repo secrets.
+  DEPLOY_HOST: stocktrials.duckdns.org
+  DEPLOY_USER: opc
+  DEPLOY_ROOT: ${{ vars.DEPLOY_ROOT || '/var/www/stocktrials' }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need enough history for the music-changed diff below
+
+      - name: Decide whether music needs (re)transcoding
+        id: music
+        run: |
+          if [ "${{ github.event.inputs.force_music }}" = "true" ]; then
+            changed=true
+          elif git rev-parse "${{ github.event.before }}" >/dev/null 2>&1; then
+            changed=$(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" -- version_2/music_assets/ | grep -q . && echo true || echo false)
+          else
+            # No usable "before" SHA (first run, force-push, etc.) - be safe.
+            changed=true
+          fi
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
+
+      - name: Pull LFS audio originals
+        if: steps.music.outputs.changed == 'true'
+        run: git lfs pull
+
+      - name: Transcode music for the web
+        if: steps.music.outputs.changed == 'true'
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          tools/transcode_music.sh
+
+      - name: Set up deploy key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Pin the Oracle box's host key
+        run: |
+          mkdir -p ~/.ssh
+          cat >> ~/.ssh/known_hosts <<'EOF'
+          stocktrials.duckdns.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOzAokg+8vUr2Zry9nxQ2kvKjnBu5RtqEv+GCikFibYY
+          stocktrials.duckdns.org ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBMjAK4c6q1Lz8kQXcLBpIHrcuBViwelDYEzdRibm+zkeUVNnEVqS3p3IQ9ermnYX38VbgbiyMMhx1j5gVhjSvdE=
+          stocktrials.duckdns.org ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDER0iKa08rdMaVmmgWMQxA8RjGb0GFgUa3tlKSuj83YXtCcqJJXs9yxGcd/aJOWOdsX76WJECSbuxnPV6cgFvEjJhBwPQo9K0+WwQGtDIX7rCO9ZUEXrlKhJPr08s0eGLYUBCn/5HlJaR7gI4mKgPNlEzoCKPeh2VphaCDTbla2Zwm2FMgB1Vjvku2Rj0XfvBvnCx2lcVwLHhzQVyegLRTkj/Wmb6qKHabTd07HbsYqPNSRFcK6yMcNq4Bk64Vp8iw/BRq0FccG4nE8rPB5573ZVvwAx/X5T+E8+pR6XX6I6lWtSt0ds39ByDagv/aDaB6tw10mGK95RpWR70UeY5HwJrd0sn+q7UjSQb6GnsgDti9kC/tG8o7R5dWPizSU/671Que7ds45nWpqiGwXv8+SMbmrh75LxFLtCwZ80QIlnKCBnDexV4VPyE8wxHToqsoLO8z+MZrew+qVDYTdRd6b0t8adYO9deiDiCRs82w8inTR93zwhmNVVm5xzn8ZCM=
+          EOF
+
+      - name: Ensure deploy root exists
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            "sudo mkdir -p '$DEPLOY_ROOT' && sudo chown -R $DEPLOY_USER:$DEPLOY_USER '$DEPLOY_ROOT' && sudo chmod -R a+rX '$DEPLOY_ROOT'"
+
+      - name: Sync app
+        run: |
+          rsync -az --delete \
+            --exclude 'music_assets/' \
+            --exclude 'music_assets_web/' \
+            version_2/ "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_ROOT/"
+
+      - name: Sync audio
+        if: steps.music.outputs.changed == 'true'
+        run: |
+          rsync -az --delete \
+            version_2/music_assets_web/ "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_ROOT/music_assets/"
+
+      - name: Fix permissions for the caddy user
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            "sudo chmod -R a+rX '$DEPLOY_ROOT' && sudo restorecon -R '$DEPLOY_ROOT'"
+
+      - name: Done
+        run: echo "Deployed to https://stocktrials.duckdns.org"
