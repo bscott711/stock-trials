@@ -6,9 +6,26 @@
 
 export const WHEEL_R = 30; // wheel radius
 const WHEELBASE = 100;
-const SEAT_HEIGHT = 75;
-const HANDLEBAR_HEIGHT = 100;
 const CRANK_LENGTH = 12;
+
+// Seat/handlebar/crank position, in the same back-wheel-hub-relative world
+// space as FRAME_ANCHOR_X/Y (js/render/playerSprite.js) - these were
+// measured directly off assets/sprites/player/frame.png (a road-bike frame
+// with a long top tube and low, forward drop bars), not derived from a
+// formula, because the old SEAT_HEIGHT/HANDLEBAR_HEIGHT constants here
+// assumed the previous procedural stick-figure bike and left the sprite-art
+// rider floating well above the seat with the legs/torso/headlight all
+// anchored to points that don't exist on the new frame art. SEAT_X is
+// nudged forward of the saddle's own visual center (which sits under the
+// rider's hips at roughly x=-26) because the torso/leg art's arm and leg
+// reach were authored against a more upright reference bike than this one -
+// splitting the difference gets hands/feet close to the bars/pedals without
+// visibly lifting the rider off the seat. Re-measure all three (and the
+// headlight offset in drawHeadlight below) if frame.png is regenerated.
+const SEAT_X = -18;
+const SEAT_Y = -58;
+const HANDLEBAR_X = 21.5;
+const HANDLEBAR_Y = -66;
 
 export function computeRig(distanceTraveled) {
     const wheel_angle = (distanceTraveled / WHEEL_R) % (2 * Math.PI);
@@ -18,12 +35,12 @@ export function computeRig(distanceTraveled) {
     const back_wheel_y = 0;
     const front_wheel_x = WHEELBASE / 2;
     const front_wheel_y = 0;
-    const seat_x = -WHEELBASE * 0.2; // centered seat
-    const seat_y = -SEAT_HEIGHT;
-    const handlebar_x = front_wheel_x * 0.8;
-    const handlebar_y = -HANDLEBAR_HEIGHT;
-    const crank_center_x = 0;
-    const crank_center_y = -15;
+    const seat_x = SEAT_X;
+    const seat_y = SEAT_Y;
+    const handlebar_x = HANDLEBAR_X;
+    const handlebar_y = HANDLEBAR_Y;
+    const crank_center_x = -1.5;
+    const crank_center_y = -3;
 
     const pedal_x = crank_center_x + CRANK_LENGTH * Math.cos(pedal_angle);
     const pedal_y = crank_center_y + CRANK_LENGTH * Math.sin(pedal_angle);
@@ -160,8 +177,8 @@ export function drawBikeFrame(ctx, rig) {
 
 export function drawHeadlight(ctx, rig, darknessLevel) {
     const headlightIntensity = Math.min(1, darknessLevel);
-    const headlightX = rig.handlebar_x + 7; // meets the handlebars
-    const headlightY = rig.handlebar_y + 20; // meets where the tube meets the handlebars
+    const headlightX = rig.handlebar_x - 8; // down at the stem, not the grip
+    const headlightY = rig.handlebar_y + 13; // meets where the tube meets the handlebars
     const headlightLength = 520; // how far the light reaches
     const CONE_HALF_ANGLE = Math.PI / 13;
     const spread = headlightLength * Math.tan(CONE_HALF_ANGLE);
