@@ -20,7 +20,15 @@ export const PLAYER_LEG_FRAMES = Array.from(
 
 // Torso sways slightly with each pedal stroke rather than sitting frozen -
 // same idea as the legs, just a coarser cycle since the motion is subtler.
-export const PLAYER_TORSO_FRAME_COUNT = 4;
+// Only 2 of the 4 generated torso-N.png frames are used here: torso-2 and
+// torso-3 came out of tools/build_player_sprites.py with their hip anchor
+// mis-detected (its bottom_anchor_excl_hand heuristic doesn't track the hip
+// correctly on a more hunched-forward lean), landing 15-19px off from
+// torso-0/torso-1's anchor. Cycling all 4 visibly snapped the rider's whole
+// upper body sideways twice per pedal revolution. torso-0/torso-1 are
+// properly registered against each other, so sway is limited to those until
+// torso-2/torso-3 are regenerated with a corrected anchor.
+export const PLAYER_TORSO_FRAME_COUNT = 2;
 export const PLAYER_TORSO_FRAMES = Array.from(
     { length: PLAYER_TORSO_FRAME_COUNT },
     (_, i) => `player.torso${i}`,
