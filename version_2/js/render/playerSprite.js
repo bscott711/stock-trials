@@ -1,5 +1,5 @@
 import { getSprite } from './assets.js';
-import { computeRig, drawBikeFrame, drawProceduralWheel, drawHeadlight } from '../drawbike.js';
+import { computeRig, drawBikeFrame, drawProceduralWheel, drawHeadlight, drawPedals } from '../drawbike.js';
 import { drawRiderUpperBody, drawRiderLegs } from '../drawrider.js';
 import { DustEmitter } from './dust.js';
 import { PLAYER_LEG_FRAME_COUNT, PLAYER_TORSO_FRAME_COUNT } from './spriteManifest.js';
@@ -89,6 +89,10 @@ function drawFrame(ctx, rig) {
             rig.back_wheel_x - FRAME_ANCHOR_X, rig.back_wheel_y - FRAME_ANCHOR_Y,
             frameSprite.width, frameSprite.height,
         );
+        // frame.png bakes a static, non-rotating crank graphic - draw the
+        // real rotating pedals over it (drawBikeFrame's procedural fallback
+        // already includes them, so this only applies to the sprite path).
+        drawPedals(ctx, rig);
     } else {
         drawBikeFrame(ctx, rig);
     }
