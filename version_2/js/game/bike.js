@@ -19,10 +19,11 @@ const JUMP_IMPULSE = 520;
 // AIR_TORQUE was 9 rad/s^2 - simulating this update() loop standalone found
 // held-full-lean rotation reaches only ~97 degrees over a flat-ground jump's
 // ~0.63s hang time, and needs ~1.28s of continuous max lean to complete a
-// single 360 degree rotation at all. Since CRASH_ANGLE only tolerates +/-55
-// degrees off upright, that meant partial rotation never lands safely and
-// a full rotation was outside the reachable hang-time range on all but the
-// biggest drops - a flip could not actually be landed. Raised so a full
+// single 360 degree rotation at all. The landing check at the time only
+// tolerated +/-55 degrees off upright, so that meant partial rotation never
+// landed safely and a full rotation was outside the reachable hang-time
+// range on all but the biggest drops - a flip could not actually be landed.
+// Raised so a full
 // flip's rotation completes within realistic hang times (a plain jump
 // through a big drop, roughly 0.65-1.15s) with a real, if imperfect, window
 // to release lean and land on it - the physics-budget bug, not the timing
@@ -30,10 +31,18 @@ const JUMP_IMPULSE = 520;
 const AIR_TORQUE = 40;
 const AIR_DAMP = 0.4;
 const MAX_ANGVEL = 14;
-const CRASH_ANGLE = 0.96;   // ~55deg
 const LAND_PERFECT = 0.31;  // ~18deg
 const COYOTE_TIME = 0.10;
 const JUMP_BUFFER = 0.12;
+
+// Rider head position in the rig's local (pre-rotation) space, relative to
+// the same wheelbase-midpoint origin computeRig() uses - hand-copied from
+// js/drawrider.js (head_x = seat_x - 2, head_y = seat_y - TORSO_LENGTH -
+// HEAD_R off js/drawbike.js's SEAT_X/Y) rather than imported, since physics
+// doesn't otherwise depend on the render/rig modules (see WHEEL_R above).
+// Re-measure if that geometry ever changes.
+const HEAD_LOCAL_X = -25.5;
+const HEAD_LOCAL_Y = -134.2;
 
 // Auto-level: a plain Space-only jump never rotates the bike (no lean input
 // means zero torque below), so it lands at whatever angle it took off at.
@@ -159,9 +168,19 @@ export class Bike {
         const surfaceAngle = Math.atan(this.terrain.sampleSlope(this.x));
         const diff = Math.abs(wrapPi(this.angle - surfaceAngle));
 
-        // Three bands, not two. A single pass/fail threshold is what makes
-        // trials games feel arbitrary.
-        if (diff >= CRASH_ANGLE) {
+        // A landing only crashes if the rider's actual head would be in the
+        // ground, not off some fixed lean-angle cutoff - a wheelie (rear
+        // wheel down) or a stoppie (front wheel down) is a real landing this
+        // rig's geometry can take well past what a flat angle threshold used
+        // to allow; only going far enough over the bars or the back to bring
+        // the head down is a genuine crash.
+        const cos = Math.cos(this.angle);
+        const sin = Math.sin(this.angle);
+        const headX = this.x + HEAD_LOCAL_X * cos - HEAD_LOCAL_Y * sin;
+        const headY = this.y + HEAD_LOCAL_X * sin + HEAD_LOCAL_Y * cos;
+        const headClearance = this.terrain.sampleY(headX) - headY;
+
+        if (headClearance <= 0) {
             this.crashed = true;
             this.lastLanding = 'crash';
             // Already sitting on the surface (this.y was just clamped above),
