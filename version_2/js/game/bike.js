@@ -16,9 +16,20 @@ const MAX_SPEED = 620;
 const MIN_SPEED = 60;
 const GRAVITY = 1600;
 const JUMP_IMPULSE = 520;
-const AIR_TORQUE = 9;
+// AIR_TORQUE was 9 rad/s^2 - simulating this update() loop standalone found
+// held-full-lean rotation reaches only ~97 degrees over a flat-ground jump's
+// ~0.63s hang time, and needs ~1.28s of continuous max lean to complete a
+// single 360 degree rotation at all. Since CRASH_ANGLE only tolerates +/-55
+// degrees off upright, that meant partial rotation never lands safely and
+// a full rotation was outside the reachable hang-time range on all but the
+// biggest drops - a flip could not actually be landed. Raised so a full
+// flip's rotation completes within realistic hang times (a plain jump
+// through a big drop, roughly 0.65-1.15s) with a real, if imperfect, window
+// to release lean and land on it - the physics-budget bug, not the timing
+// skill, was what made this unlandable before.
+const AIR_TORQUE = 40;
 const AIR_DAMP = 0.4;
-const MAX_ANGVEL = 12;
+const MAX_ANGVEL = 14;
 const CRASH_ANGLE = 0.96;   // ~55deg
 const LAND_PERFECT = 0.31;  // ~18deg
 const COYOTE_TIME = 0.10;
