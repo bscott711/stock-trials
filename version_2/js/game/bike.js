@@ -40,12 +40,23 @@ const JUMP_BUFFER = 0.12;
 // Terrain slope changes fast enough over a typical ~0.65s hang time that
 // this alone was enough to cross CRASH_ANGLE on most jumps. This is a
 // critically-damped spring pulling angle back toward level (0), active only
-// when the player isn't actively steering AND isn't mid-trick, so it never
-// fights a deliberate flip (which needs sustained angVel well above the
-// cutoff to complete a rotation in one hang time).
-const AUTO_LEVEL_OMEGA = 4;         // rad/s natural frequency
-const AUTO_LEVEL_ZETA = 1;          // 1 = critically damped, no overshoot
-const AUTO_LEVEL_SPIN_CUTOFF = 2.5; // rad/s - at/above this a trick is in progress
+// when the player isn't actively steering AND isn't mid-trick.
+//
+// "Mid-trick" used to be judged by instantaneous spin rate (angVel above a
+// cutoff), but that cutoff was tuned back when AIR_TORQUE was 9 - at 40, a
+// lean tap held for barely 60ms now crosses it, permanently disabling
+// recovery for the rest of the jump over a few accidental degrees of spin
+// (confirmed by simulating single-jump lean taps standalone: a 50ms tap
+// self-corrects and lands perfectly, a 70ms tap - only ~5 degrees of actual
+// rotation at release - never recovers and crashes with 500ms of untouched
+// air time left to do it in). Gating on ACCUMULATED rotation instead fixes
+// this without touching real flips: a committed flip blows past this cutoff
+// within ~150-200ms of holding lean (well before the ~300ms hold a flip
+// actually needs to complete), so it's already spinning too far to trip this
+// the same way an accidental tap never gets close.
+const AUTO_LEVEL_OMEGA = 4;            // rad/s natural frequency
+const AUTO_LEVEL_ZETA = 1;             // 1 = critically damped, no overshoot
+const AUTO_LEVEL_ROTATION_CUTOFF = Math.PI / 3; // ~60deg accumulated - past this, a trick is in progress
 const LEAN_DEADZONE = 0.05;
 
 export class Bike {
@@ -112,7 +123,7 @@ export class Bike {
             const lean = input.lean();
             this.angVel += lean * AIR_TORQUE * dt;
 
-            if (Math.abs(lean) < LEAN_DEADZONE && Math.abs(this.angVel) < AUTO_LEVEL_SPIN_CUTOFF) {
+            if (Math.abs(lean) < LEAN_DEADZONE && Math.abs(this.totalRotation) < AUTO_LEVEL_ROTATION_CUTOFF) {
                 const wrapped = wrapPi(this.angle);
                 const omega2 = AUTO_LEVEL_OMEGA * AUTO_LEVEL_OMEGA;
                 const restoring = -omega2 * wrapped - 2 * AUTO_LEVEL_ZETA * AUTO_LEVEL_OMEGA * this.angVel;
@@ -153,6 +164,13 @@ export class Bike {
         if (diff >= CRASH_ANGLE) {
             this.crashed = true;
             this.lastLanding = 'crash';
+            // Already sitting on the surface (this.y was just clamped above),
+            // so it's landed, not still falling - without this the crashed-
+            // coast branch in update() re-applies gravity for one extra step
+            // before its own clamp catches up.
+            this.airborne = false;
+            this.vy = 0;
+            this.angVel = 0;
             return;
         }
 
