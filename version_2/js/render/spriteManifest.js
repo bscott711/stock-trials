@@ -27,37 +27,69 @@ export const PLAYER_RIG_FRAMES = Array.from(
     (_, i) => `player.rig${i}`,
 );
 
+// Each scenery object has several hand-drawn style variants (sliced from a
+// single contact-sheet PNG per biome by tools/build_scenery_sprites.py, one
+// row per object) rather than one canonical image - `variantIds`/
+// `variantEntries` expand a `<namespace>0..N-1` id run and its matching
+// `<dir>/<slug>-0..N-1.png` paths so every variant is just another entry a
+// biome's sprite pool can randomly draw from (see Tree/Rock in
+// world/scenery.js, which already picks a random pool entry per instance).
+function variantIds(namespace, count) {
+    return Array.from({ length: count }, (_, i) => `${namespace}${i}`);
+}
+
+function variantEntries(namespace, dir, slug, count) {
+    return Array.from({ length: count }, (_, i) => ({
+        id: `${namespace}${i}`,
+        path: `${BASE}/${dir}/${slug}-${i}.png`,
+    }));
+}
+
+const WOODS_PINE_TREE = variantIds('woods.pineTree', 5);
+const WOODS_FALLEN_LOG = variantIds('woods.fallenLog', 6);
+const BEACH_PALM_TREE = variantIds('beach.palmTree', 5);
+const BEACH_DRIFTWOOD = variantIds('beach.driftwood', 5);
+const BEACH_UMBRELLA = variantIds('beach.beachUmbrella', 5);
+const MOUNTAINS_DEAD_TREE = variantIds('mountains.deadTree', 5);
+const MOUNTAINS_BOULDER = variantIds('mountains.boulder', 5);
+const MOUNTAINS_SNOW_PATCH = variantIds('mountains.snowPatch', 5);
+const FIELDS_HAY_BALE = variantIds('fields.hayBale', 8);
+const FIELDS_WILDFLOWER_CLUMP = variantIds('fields.wildflowerClump', 6);
+const FIELDS_FENCE_POST = variantIds('fields.fencePost', 6);
+
 export const SPRITE_MANIFEST = [
     ...PLAYER_RIG_FRAMES.map((id, i) => ({ id, path: `${BASE}/player/rig-${i}.png` })),
 
-    { id: 'woods.pineTree', path: `${BASE}/woods/pine-tree.png` },
-    { id: 'woods.fallenLog', path: `${BASE}/woods/fallen-log.png` },
+    ...variantEntries('woods.pineTree', 'woods', 'pine-tree', WOODS_PINE_TREE.length),
+    ...variantEntries('woods.fallenLog', 'woods', 'fallen-log', WOODS_FALLEN_LOG.length),
 
-    { id: 'beach.palmTree', path: `${BASE}/beach/palm-tree.png` },
-    { id: 'beach.driftwood', path: `${BASE}/beach/driftwood.png` },
-    { id: 'beach.beachUmbrella', path: `${BASE}/beach/beach-umbrella.png` },
+    ...variantEntries('beach.palmTree', 'beach', 'palm-tree', BEACH_PALM_TREE.length),
+    ...variantEntries('beach.driftwood', 'beach', 'driftwood', BEACH_DRIFTWOOD.length),
+    ...variantEntries('beach.beachUmbrella', 'beach', 'beach-umbrella', BEACH_UMBRELLA.length),
 
-    { id: 'mountains.deadTree', path: `${BASE}/mountains/dead-tree.png` },
-    { id: 'mountains.boulder', path: `${BASE}/mountains/boulder.png` },
-    { id: 'mountains.snowPatch', path: `${BASE}/mountains/snow-patch.png` },
+    ...variantEntries('mountains.deadTree', 'mountains', 'dead-tree', MOUNTAINS_DEAD_TREE.length),
+    ...variantEntries('mountains.boulder', 'mountains', 'boulder', MOUNTAINS_BOULDER.length),
+    ...variantEntries('mountains.snowPatch', 'mountains', 'snow-patch', MOUNTAINS_SNOW_PATCH.length),
 
-    { id: 'fields.hayBale', path: `${BASE}/fields/hay-bale.png` },
-    { id: 'fields.wildflowerClump', path: `${BASE}/fields/wildflower-clump.png` },
-    { id: 'fields.fencePost', path: `${BASE}/fields/fence-post.png` },
+    ...variantEntries('fields.hayBale', 'fields', 'hay-bale', FIELDS_HAY_BALE.length),
+    ...variantEntries('fields.wildflowerClump', 'fields', 'wildflower-clump', FIELDS_WILDFLOWER_CLUMP.length),
+    ...variantEntries('fields.fencePost', 'fields', 'fence-post', FIELDS_FENCE_POST.length),
 ];
 
 // Which sprites a Tree instance (tall, bottom-anchored) vs a Rock instance
-// (clutter, center-anchored) may draw, per biome.
+// (clutter, center-anchored) may draw, per biome - Tree/Rock pick a random
+// entry from these pools per instance (world/scenery.js), so listing every
+// variant here is what gives each biome its visual variety.
 export const BIOME_TALL_SPRITES = {
     fields: [],
-    woods: ['woods.pineTree'],
-    beach: ['beach.palmTree'],
-    mountains: ['mountains.deadTree'],
+    woods: WOODS_PINE_TREE,
+    beach: BEACH_PALM_TREE,
+    mountains: MOUNTAINS_DEAD_TREE,
 };
 
 export const BIOME_CLUTTER_SPRITES = {
-    fields: ['fields.hayBale', 'fields.wildflowerClump', 'fields.fencePost'],
-    woods: ['woods.fallenLog'],
-    beach: ['beach.driftwood', 'beach.beachUmbrella'],
-    mountains: ['mountains.boulder', 'mountains.snowPatch'],
+    fields: [...FIELDS_HAY_BALE, ...FIELDS_WILDFLOWER_CLUMP, ...FIELDS_FENCE_POST],
+    woods: WOODS_FALLEN_LOG,
+    beach: [...BEACH_DRIFTWOOD, ...BEACH_UMBRELLA],
+    mountains: [...MOUNTAINS_BOULDER, ...MOUNTAINS_SNOW_PATCH],
 };
