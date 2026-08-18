@@ -184,10 +184,16 @@ export class Scenery {
         }
 
         // Forest clumps - shorter than standalone feature trees (denser
-        // background mass), but still clearly taller than the rider.
-        const fx = start + rng() * (SEGMENT - 1000);
-        const fw = rng() * 500 + 300;
-        const fn = Math.floor(rng() * 10) + 5;
+        // background mass), but still clearly taller than the rider. fw/fn
+        // are sized so the average spacing (fw/fn) comfortably clears a
+        // clump tree's own canopy width now that trees are much bigger -
+        // at the old fw=300-800/fn=5-14 ranges, average spacing (~58 world
+        // units) was already tight for the old small trees and heavily
+        // overlapped once tree height (and so canopy width) roughly
+        // tripled.
+        const fx = start + rng() * (SEGMENT - 1500);
+        const fw = rng() * 800 + 700;
+        const fn = Math.floor(rng() * 6) + 4;
         for (let j = 0; j < fn; j++) {
             const x = fx + rng() * fw;
             trees.push(new Tree(x, this.terrain.sampleY(x), rng() * 100 + 70, rng, tallSprites));

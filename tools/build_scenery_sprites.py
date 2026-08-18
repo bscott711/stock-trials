@@ -51,6 +51,12 @@ SPRITE_ROOT = "version_2/assets/sprites"
 TEXT_MAX_H = 45  # tallest caption/letter glyph row is well under this; every object is well over it
 PAD = 6
 
+# Bottom-anchored (world.js Tree) sprites get 0 bottom padding - see crop()'s
+# pad_bottom docstring for why any padding here becomes a visible gap once
+# scaled up to world-unit height. Clutter is center-anchored and keeps
+# uniform padding, so it isn't listed here.
+TALL_SLUGS = {"pine-tree", "palm-tree", "dead-tree"}
+
 # (sheet path, output dir, row_gap_px) -> rows top-to-bottom as (slug, expected_count)
 # row_gap_px is the y-gap that separates one category's row-band from the
 # next; it varies per sheet because some sheets pack categories much closer
@@ -246,14 +252,25 @@ def detect_rows(arr, text_max_h=TEXT_MAX_H, min_area=150, row_gap_px=60, expecte
     return rows
 
 
-def crop(arr, b, pad=PAD):
+def crop(arr, b, pad=PAD, pad_bottom=None):
     """Crop to bbox+pad, masking out any pixel that isn't part of this
     component/split-half - a plain rectangular crop would pull in slivers
     of a neighboring sprite whenever art gets close to (or, pre-split,
     touches) another item, which happens throughout these dense sheets.
+
+    `pad_bottom` overrides the bottom margin specifically - the game draws
+    bottom-anchored sprites (trees) with their exact last pixel row planted
+    on the ground, so any padding below the trunk's true base becomes a gap
+    between the tree and the grass once the sprite is scaled up to its
+    world-unit height (a 6px pad is invisible at a small scale, but reads
+    as "floating" once that same 6px is stretched by a large scale factor).
+    Center-anchored clutter doesn't have this problem, so it keeps uniform
+    padding.
     """
+    if pad_bottom is None:
+        pad_bottom = pad
     h, w = arr.shape[:2]
-    y0, y1 = max(0, b["y0"] - pad), min(h, b["y1"] + pad + 1)
+    y0, y1 = max(0, b["y0"] - pad), min(h, b["y1"] + pad_bottom + 1)
     x0, x1 = max(0, b["x0"] - pad), min(w, b["x1"] + pad + 1)
     sub = arr[y0:y1, x0:x1].copy()
     mask = b["mask"][y0:y1, x0:x1]
@@ -353,8 +370,9 @@ def main():
                 continue
             out_subdir = os.path.join("version_2/assets/sprites", out_dir)
             os.makedirs(out_subdir, exist_ok=True)
+            pad_bottom = 0 if slug in TALL_SLUGS else None
             for i, b in enumerate(row):
-                sub = crop(arr, b)
+                sub = crop(arr, b, pad_bottom=pad_bottom)
                 Image.fromarray(sub, "RGBA").save(os.path.join(out_subdir, f"{slug}-{start_index + i}.png"))
             print(f"  {slug}: wrote {len(row)} -> {out_subdir}/{slug}-{start_index}..{start_index + len(row) - 1}.png")
 
