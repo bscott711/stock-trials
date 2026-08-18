@@ -192,7 +192,8 @@ class MusicManager {
         if (this.currentTrackIndex < 0 || !this.trackPaths[this.currentTrackIndex]) {
             return 'No track playing';
         }
-        return decodeURIComponent(this.trackPaths[this.currentTrackIndex].split('/').pop());
+        const filename = decodeURIComponent(this.trackPaths[this.currentTrackIndex].split('/').pop());
+        return filename.replace(/\.mp3$/i, '');
     }
 
     setVolume(volume) {

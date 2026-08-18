@@ -80,12 +80,22 @@ export class Sky {
         const types = ['cumulus', 'cirrus', 'stratus'];
         for (let i = 0; i < 10; i++) {
             const type = types[Math.floor(Math.random() * types.length)];
+            // One cloud in five is a big one, so the sky isn't uniformly
+            // small puffs - a few outsized formations read as more natural.
+            const bigCloud = Math.random() < 0.2 ? (Math.random() * 1.2 + 1.6) : 1;
             const c = {
                 x: Math.random() * this._w,
                 y: Math.random() * (this._h / 3) + this._h / 4,
-                maxSize: Math.random() * 50 + 20,
+                maxSize: (Math.random() * 50 + 20) * bigCloud,
                 speed: (Math.random() * 0.5 + 0.2) * 18, // px/s
                 opacity: Math.random() * 0.3 + 0.4,
+                // Sprite art has its own outlines/shading baked in, unlike
+                // the flat procedural shapes opacity was originally tuned
+                // for - at that low alpha a cloud drawn over the sun or
+                // moon reads as a wash the celestial shines through rather
+                // than something actually in front of it, so sprites get
+                // their own near-opaque alpha.
+                spriteOpacity: Math.random() * 0.15 + 0.85,
                 type,
                 noise: Math.random() * 0.2,
                 // Style variant this instance may draw instead of the
@@ -348,7 +358,7 @@ export class Sky {
                 const scale = targetW / sprite.width;
                 const w = sprite.width * scale, h = sprite.height * scale;
                 ctx.save();
-                ctx.globalAlpha = o;
+                ctx.globalAlpha = clamp(vis * c.spriteOpacity, 0, 1);
                 ctx.drawImage(sprite, c.x - w / 2, c.y - h / 2, w, h);
                 ctx.restore();
                 continue;
