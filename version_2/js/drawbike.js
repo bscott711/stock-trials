@@ -1,33 +1,31 @@
 // Procedural fallback for the bike rig (frame/seat/pedals/wheels/headlight),
-// used by render/playerSprite.js piece-by-piece whenever the matching sprite
-// hasn't been generated yet (see assets/sprites/PROMPTS.md). computeRig() is
-// the single source of truth for the bike's geometry - render/playerSprite.js
-// and js/drawrider.js both consume its output rather than re-deriving it.
+// used by render/playerSprite.js only when no player.rigN sprite has been
+// generated yet (see assets/sprites/PROMPTS.md) - the normal rendering path
+// is a single fused bike+rider image per pedal-angle bucket, which doesn't
+// use any of this geometry at all. computeRig() is still the single source
+// of truth for the bike's *world-space* motion (wheel/pedal angle, wheel
+// positions) that both this fallback and the sprite path need, though - see
+// js/render/playerSprite.js and js/drawrider.js.
 
 export const WHEEL_R = 30; // wheel radius
 const WHEELBASE = 100;
 const CRANK_LENGTH = 12;
 
-// Seat/handlebar/crank position, in the same back-wheel-hub-relative world
-// space as FRAME_ANCHOR_X/Y (js/render/playerSprite.js) - pixel-measured
-// directly off assets/sprites/player/frame.png (world = pixel - 86.52,
-// pixel - 78.19, i.e. frame's own pixel coords minus the back-wheel-hub
-// pixel (36.52, 78.19), since that hub pixel is defined to land on
-// back_wheel_x/y = (-50, 0)). crank_center in particular was previously a
-// leftover from the old procedural stick-figure bike and had never been
-// re-measured against this art - it landed up near the seat/handlebar
-// instead of down at the frame's actual bottom-bracket/chainring, which is
-// why the pedals (crank_center +/- CRANK_LENGTH) rendered nowhere near the
-// crank graphic baked into frame.png. Re-measure all three (and the
-// headlight offset in drawHeadlight below) if frame.png is regenerated.
+// Seat/handlebar/crank position for the procedural fallback rider, in
+// back-wheel-hub-relative world space. Originally pixel-measured directly
+// off a frame.png that shipped when the game used separate frame/torso/legs
+// sprites instead of a fused whole-rig image (world = pixel - 86.52, pixel
+// - 78.19, i.e. frame's own pixel coords minus the back-wheel-hub pixel
+// (36.52, 78.19)) - that sprite art is gone now, but these numbers still
+// describe a reasonable generic bike for this fallback to draw.
 const SEAT_X = -23.5;
 const SEAT_Y = -54.2;
 const HANDLEBAR_X = 15.5;
 const HANDLEBAR_Y = -69.2;
 
 // Where the handlebar's curve ends and the fork/stem tube begins (not the
-// grip out at HANDLEBAR_X/Y) - also pixel-measured off frame.png, same
-// formula as above. Used only for the headlight mount in drawHeadlight.
+// grip out at HANDLEBAR_X/Y). Used only for the headlight mount in
+// drawHeadlight, which nothing currently calls (see playerSprite.js).
 const HEADLIGHT_X = 28.5;
 const HEADLIGHT_Y = -58.2;
 

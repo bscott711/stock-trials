@@ -7,40 +7,28 @@
 
 const BASE = './assets/sprites';
 
-// Legs pedal in a circle - a single static image (or one image rotated,
-// the trick that works for the wheels) can't fake that, so they get their
-// own cycle of pose frames instead, indexed by rig.pedal_angle. 8 frames
-// is a smooth-reading compromise between motion quality and how much art
-// has to be generated and kept consistent (see PROMPTS.md).
-export const PLAYER_LEG_FRAME_COUNT = 8;
-export const PLAYER_LEG_FRAMES = Array.from(
-    { length: PLAYER_LEG_FRAME_COUNT },
-    (_, i) => `player.legs${i}`,
-);
-
-// Torso sways slightly with each pedal stroke rather than sitting frozen -
-// same idea as the legs, just a coarser cycle since the motion is subtler.
-// Only 2 of the 4 generated torso-N.png frames are used here: torso-2 and
-// torso-3 came out of tools/build_player_sprites.py with their hip anchor
-// mis-detected (its bottom_anchor_excl_hand heuristic doesn't track the hip
-// correctly on a more hunched-forward lean), landing 15-19px off from
-// torso-0/torso-1's anchor. Cycling all 4 visibly snapped the rider's whole
-// upper body sideways twice per pedal revolution. torso-0/torso-1 are
-// properly registered against each other, so sway is limited to those until
-// torso-2/torso-3 are regenerated with a corrected anchor.
-export const PLAYER_TORSO_FRAME_COUNT = 2;
-export const PLAYER_TORSO_FRAMES = Array.from(
-    { length: PLAYER_TORSO_FRAME_COUNT },
-    (_, i) => `player.torso${i}`,
+// The whole bike+rider (frame, torso, legs, wheels - everything) as one
+// fused image per pedal-angle bucket, extracted from a locked-off video of
+// one pedal-stroke cycle (tools/build_player_rig.py) rather than assembled
+// from independently-generated frame/torso/legs pieces. Older approach hit
+// its ceiling on exactly the problem this sidesteps: separately-generated
+// parts have no shared scale or reach, which is what js/drawbike.js's
+// SEAT_X/HANDLEBAR_X/crank_center measurements were hand-tuning around. A
+// fused frame can't have that mismatch - whatever the source draws is
+// exactly what renders. Since rig.pedal_angle and rig.wheel_angle are the
+// same value (js/drawbike.js computeRig()), each frame's baked-in wheel
+// position is also already correct for its bucket - no separate rotating
+// wheel sprite needed. 6 frames is this clip's pedal-stroke cycle divided
+// evenly; see tools/build_player_rig.py's docstring to regenerate with a
+// different frame count or a different source clip.
+export const PLAYER_RIG_FRAME_COUNT = 6;
+export const PLAYER_RIG_FRAMES = Array.from(
+    { length: PLAYER_RIG_FRAME_COUNT },
+    (_, i) => `player.rig${i}`,
 );
 
 export const SPRITE_MANIFEST = [
-    { id: 'player.bikeRider', path: `${BASE}/player/bike-rider.png` },
-    { id: 'player.frame', path: `${BASE}/player/frame.png` },
-    { id: 'player.wheelFront', path: `${BASE}/player/wheel-front.png` },
-    { id: 'player.wheelBack', path: `${BASE}/player/wheel-back.png` },
-    ...PLAYER_LEG_FRAMES.map((id, i) => ({ id, path: `${BASE}/player/legs-${i}.png` })),
-    ...PLAYER_TORSO_FRAMES.map((id, i) => ({ id, path: `${BASE}/player/torso-${i}.png` })),
+    ...PLAYER_RIG_FRAMES.map((id, i) => ({ id, path: `${BASE}/player/rig-${i}.png` })),
 
     { id: 'woods.pineTree', path: `${BASE}/woods/pine-tree.png` },
     { id: 'woods.fallenLog', path: `${BASE}/woods/fallen-log.png` },

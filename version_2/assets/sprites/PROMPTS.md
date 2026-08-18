@@ -3,56 +3,95 @@
 None of these PNGs ship by default — the game runs entirely on its
 procedural canvas fallback until a file listed below actually exists at the
 given path. Generate each with an external image-gen tool (Midjourney,
-DALL·E, SDXL, etc.), export as a **transparent-background PNG**, and save it
-at the exact path shown. Drop in as many or as few as you like — every
-sprite slot degrades independently back to the procedural look when its file
-is missing.
+DALL·E, SDXL, etc.), export on a **plain solid white background** (see
+below — not transparency), and save it at the exact path shown. Drop in as
+many or as few as you like — every sprite slot degrades independently back
+to the procedural look when its file is missing.
 
-## ⚠️ Real transparency, not a white/checkerboard background
+## Background: solid white, not transparency
 
-Two rounds of the player sprite came back looking transparent but weren't:
-one had no alpha channel at all (a checkerboard pattern baked into opaque
-pixels), the other had an alpha channel but every pixel was set to fully
-opaque over a flattened white background. Both show up in-game as a solid
-grey or white box behind the character instead of blending into the sky.
+Earlier rounds asked the image-gen tool for a transparent background and it
+never reliably delivered one — one export had no alpha channel at all (a
+checkerboard *pattern* baked into opaque pixels, not real transparency),
+another had an alpha channel but every pixel set fully opaque over a
+flattened white background. Both showed up in-game as a solid grey/white box
+behind the character instead of blending into the sky.
 
-Before saving a file, check it actually has per-pixel transparency — the
-background must read as *see-through*, not just "looks checkered/white in
-my preview." If your tool has an explicit "remove background" step
-(separate from just "export as PNG"), use it. A quick sanity check: open the
-PNG over a brightly colored background in an image viewer/editor — if you
-still see a white or checkered box around the subject, it's not
-transparent yet.
+Asking for transparency and hoping the tool did it right isn't reliable.
+Instead: **ask for a plain solid white background**, then let
+`tools/build_player_sprites.py` / `tools/build_bike_frame.py` strip it in
+post — both already flood-fill transparency inward from the image border by
+sampling the corner color (see `remove_background()` in either script), so a
+clean flat white background is exactly what they're built to remove, and
+it's a much more consistent ask for an image-gen tool than "transparent PNG."
+No prompt below should mention transparency — say "plain solid white
+background" instead.
 
 ## Style anchor
 
 Prepend this verbatim to every prompt below, so a human running them
 independently gets a stylistically matching set:
 
-> Flat vector game-art illustration, side-view (profile) orthographic,
-> isolated on a fully transparent background (PNG). Bold clean 2–3px dark
-> outline around every shape. Flat, lightly cel-shaded fills using only 3–4
-> flat colors per object plus outline — no gradients, no photographic
-> texture, no soft airbrushing, no background scenery, no ground shadow
-> baked in. Simple, slightly rounded, chunky geometric shapes that read
-> clearly at small size, in the style of a cheerful stylized arcade
-> bike-trials game. Warm, soft directional lighting from the upper-left
-> suggested only by one shade-tone shift per shape, not by gradients.
+> Flat vector game-art illustration, side-view (profile) orthographic, on a
+> plain solid white background (no scenery, no ground shadow). Bold clean
+> 2–3px dark outline around every shape. Flat, lightly cel-shaded fills using
+> only 3–4 flat colors per object plus outline — no gradients, no
+> photographic texture, no soft airbrushing. Simple, slightly rounded,
+> chunky geometric shapes that read clearly at small size, in the style of a
+> cheerful stylized arcade bike-trials game. Warm, soft directional lighting
+> from the upper-left suggested only by one shade-tone shift per shape, not
+> by gradients.
 
 ## Player (required for the sprite bike+rider to appear at all)
 
-Legs pedal in a circle, so — unlike the wheels, which can just be one image
-rotated every frame — a single static leg pose would look frozen mid-stroke
-while the wheels spin under it. The body sprite below leaves legs out
-entirely; a separate 8-frame leg cycle (one pose per 45° of pedal rotation)
-is layered on top of it and swapped frame-to-frame in sync with the wheels.
+Generate a short **video**, not a static sheet: a locked-off, static-camera,
+side-view clip of the bike+rider pedaling in place for a few seconds, plain
+solid white/light background, no camera pan/zoom/drift. `tools/build_player_rig.py`
+pulls evenly-spaced frames covering one full pedal rotation out of it and
+turns them into the game's rig sprites - one **fused** whole bike+rider+legs
+image per pedal-angle bucket (`player/rig-0.png` … `rig-N.png`), rather than
+separate frame/torso/legs pieces layered at runtime.
 
-| # | Subject + sizing | Save as |
-|---|---|---|
-| 1 | Fused bicycle+rider, facing/riding right, torso leaning forward, one arm reaching to the handlebar. Blue frame, rider in cap + jacket. **No legs and no wheels** — leave the leg/hip area of the jacket ending at the seat, and leave two transparent ~64px circular gaps centered at (110,200) and (210,200) for the wheels. Canvas 320×260px. | `player/bike-rider.png` |
-| 2 | A single sprite sheet: the same rider's near-side leg only (upper leg, lower leg, foot/shoe — matching the pants/shoe colors from #1), **no bike frame, no torso, no arm**, isolated on transparent background, repeated 8 times side by side in one horizontal strip. Each of the 8 poses shows the knee bent naturally with the foot at a different point around the pedal's circular path, evenly spaced one per 45° (e.g. picture a clock face for the foot position: 12 o'clock, 1:30, 3, 4:30, 6, 7:30, 9, 10:30). Each cell is its own fixed 140×160px frame, with the hip joint (top of the leg) at the same local position in every cell: x=70, y=24 from that cell's top-left corner. | `player/legs-0.png` … `player/legs-7.png` (one file per pose, in clock order — split the strip into 8 equal-width crops) |
-| 3 | Bicycle wheel, side view, dark tire, lighter rim, even spoke pattern (no unique landmark — it rotates every frame). Canvas 80×80px, wheel centered at (40,40), radius ~34px. | `player/wheel-front.png` |
-| 4 | Same brief as #3 (reuse the same image, or add a faint rear-gear hint for variety). Canvas 80×80px, centered at (40,40), radius ~34px. | `player/wheel-back.png` |
+This replaced an earlier approach that generated legs/torso/frame as
+independent still images (a sheet of leg poses, a sheet of torso poses, a
+separate bike-frame reference) and layered them at runtime with hand-tuned
+anchor offsets. That's exactly what caused the proportion/registration
+mismatches worked around in `js/drawbike.js` for a while: every independent
+generation is a fresh roll with no guarantee it agrees with its neighbors on
+scale or reach. A video generation holds the character/bike consistent
+across frames far better, since it's one continuous generation instead of
+many - and since this game's `pedal_angle` and `wheel_angle` are the same
+value (`computeRig()` in `js/drawbike.js`), each frame's baked-in wheel
+position is automatically correct for its bucket too, so no separate
+rotating wheel sprite is needed either. `tools/build_player_sprites.py` and
+`tools/build_bike_frame.py` still exist for that older piecewise approach if
+ever needed again, but the video → fused-rig pipeline is the current one.
+
+**Picking which frames to use:** the clip needs a genuinely locked-off
+camera and one clean, evenly-paced pedal-stroke loop - `build_player_rig.py`
+shares a single scale/anchor across every frame you give it (unlike the
+per-frame independent measurement the old pipeline did), so it depends on
+the source staying put more than that older approach did. A clip that jumps,
+lands, or pans partway through is still fine as long as you only pick frames
+from the stable, cleanly-looping span - `build_player_rig.py` warns if the
+frames you picked don't actually share a consistent wheelbase. To find that
+span and the loop period: crop each candidate frame to the crank/pedal area
+and compare pixel-wise to frame 0 - the lowest-error non-trivial match is one
+full revolution later, and evenly-spaced frames between there and frame 0
+are your pose set.
+
+**Headlight:** the game's night-riding headlight cone (`drawHeadlight()` in
+`js/drawbike.js`) isn't currently wired up to any rig art - it was dropped
+when this BMX-style reference didn't have an obvious mount point for one. If
+a future reference clip has a light built into the design (helmet lamp,
+handlebar-mounted light), pixel-measure its position the same way the old
+`HEADLIGHT_X/Y` constants were measured off `frame.png`, then wire
+`drawHeadlight()` back into `js/render/playerSprite.js`'s `drawPlayer()`.
+
+Run: `uv run tools/build_player_rig.py <clip.mp4> version_2/assets/sprites/player --frames 0,4,7,11,14,18`
+(see the script's own docstring for exactly what each step does, and for how
+`--frames` and the frame count interact with
+`PLAYER_RIG_FRAME_COUNT` in `js/render/spriteManifest.js`).
 
 ## Woods
 
@@ -95,11 +134,12 @@ is layered on top of it and swapped frame-to-frame in sync with the wheels.
 - **Clutter (logs, driftwood, boulders, hay bales, flowers, posts, snow
   patches)** are drawn center-anchored and scaled off their pixel *width* as
   a stand-in diameter.
-- **Leg frames** are drawn at a fixed 140×160px box with the hip anchor at
-  (70,24), same idea as the body/wheels: the code stretches whatever you
-  give it to that box, so exact pixel dimensions aren't critical, but
-  keeping the hip at roughly the same relative spot across all 8 frames is
-  what keeps the pedaling from visibly jumping around frame to frame.
-- 14 sprites (11 world + 3 player pieces, the legs counting as one
-  8-pose set) are required to cover every biome and get the player fully
-  animated; the 3 marked *(optional)* round each biome out to 3-4 pieces.
+- **Leg/torso frames**: `build_player_sprites.py` auto-detects each frame's
+  hip anchor and normalizes every frame in a group onto a shared canvas so
+  they all land on the same anchor point — exact pixel dimensions aren't
+  critical, but keeping the hip at roughly the same relative spot across
+  every pose in a row is what keeps the pedaling/sway from visibly jumping
+  frame to frame.
+- 14 sprite groups (11 world + player frame/legs/torso/wheels) are required
+  to cover every biome and get the player fully animated; the items marked
+  *(optional)* round each biome out to 3-4 pieces.
