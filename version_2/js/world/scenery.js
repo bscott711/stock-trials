@@ -167,26 +167,30 @@ export class Scenery {
                 const n = Math.floor(rng() * 4) + 3;
                 for (let j = 0; j < n; j++) {
                     const x = cx + (rng() - 0.5) * 200;
-                    rocks.push(new Rock(x, this.terrain.sampleY(x), rng() * 15 + 5, rng, clutterSprites));
+                    rocks.push(new Rock(x, this.terrain.sampleY(x), rng() * 22 + 8, rng, clutterSprites));
                 }
             } else {
                 const x = start + rng() * SEGMENT;
-                rocks.push(new Rock(x, this.terrain.sampleY(x), rng() * 10 + 5, rng, clutterSprites));
+                rocks.push(new Rock(x, this.terrain.sampleY(x), rng() * 15 + 8, rng, clutterSprites));
             }
         }
 
+        // Height ranges are well above the rider (~150 world units tall,
+        // WHEELBASE_WORLD=100 in tools/build_player_rig.py) so trees read as
+        // towering rather than dwarfed by the bike+rider next to them.
         for (let i = 0; i < 3; i++) {
             const x = start + rng() * SEGMENT;
-            trees.push(new Tree(x, this.terrain.sampleY(x), rng() * 40 + 20, rng, tallSprites));
+            trees.push(new Tree(x, this.terrain.sampleY(x), rng() * 150 + 100, rng, tallSprites));
         }
 
-        // Forest clumps
+        // Forest clumps - shorter than standalone feature trees (denser
+        // background mass), but still clearly taller than the rider.
         const fx = start + rng() * (SEGMENT - 1000);
         const fw = rng() * 500 + 300;
         const fn = Math.floor(rng() * 10) + 5;
         for (let j = 0; j < fn; j++) {
             const x = fx + rng() * fw;
-            trees.push(new Tree(x, this.terrain.sampleY(x), rng() * 30 + 20, rng, tallSprites));
+            trees.push(new Tree(x, this.terrain.sampleY(x), rng() * 100 + 70, rng, tallSprites));
         }
 
         seg = { rocks, trees };

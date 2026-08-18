@@ -65,6 +65,21 @@ const FIELDS_FENCE_POST = variantIds('fields.fencePost', 6);
 // phase it actually is right now.
 export const MOON_PHASE_FRAMES = variantIds('sky.moon', 8);
 
+// The sun has no phase concept (unlike the moon) - these are just cosmetic
+// style/color variants, one of which sky.js rolls at random ONCE PER DAY
+// (same "roll once, keep it for the whole day" pattern as cloudFreeDay),
+// not per-instance like the biome pools since there's only ever one sun.
+export const SUN_FRAMES = variantIds('sky.sun', 12);
+
+// Cloud variants ARE per-instance random style choices (like the biome
+// clutter pools) - each of Sky's pooled cloud instances picks one from its
+// type's array once at init, same as Tree/Rock. Two source sheets per type
+// (tools/build_scenery_sprites.py's GRID_SHEETS/SHEETS start_index) land in
+// one contiguous pool per type.
+export const CLOUD_CUMULUS_FRAMES = variantIds('sky.cumulus', 17);
+export const CLOUD_CIRRUS_FRAMES = variantIds('sky.cirrus', 16);
+export const CLOUD_STRATUS_FRAMES = variantIds('sky.stratus', 17);
+
 export const SPRITE_MANIFEST = [
     ...PLAYER_RIG_FRAMES.map((id, i) => ({ id, path: `${BASE}/player/rig-${i}.png` })),
 
@@ -84,6 +99,12 @@ export const SPRITE_MANIFEST = [
     ...variantEntries('fields.fencePost', 'fields', 'fence-post', FIELDS_FENCE_POST.length),
 
     ...variantEntries('sky.moon', 'sky/moon', 'moon', MOON_PHASE_FRAMES.length),
+
+    ...variantEntries('sky.sun', 'sky/sun', 'sun', SUN_FRAMES.length),
+
+    ...variantEntries('sky.cumulus', 'sky/clouds', 'cumulus', CLOUD_CUMULUS_FRAMES.length),
+    ...variantEntries('sky.cirrus', 'sky/clouds', 'cirrus', CLOUD_CIRRUS_FRAMES.length),
+    ...variantEntries('sky.stratus', 'sky/clouds', 'stratus', CLOUD_STRATUS_FRAMES.length),
 ];
 
 // Which sprites a Tree instance (tall, bottom-anchored) vs a Rock instance

@@ -1,6 +1,15 @@
 import { lerpColor, rgb, clamp } from '../core/math.js';
 import { getSprite } from './assets.js';
-import { MOON_PHASE_FRAMES } from './spriteManifest.js';
+import {
+    MOON_PHASE_FRAMES, SUN_FRAMES,
+    CLOUD_CUMULUS_FRAMES, CLOUD_CIRRUS_FRAMES, CLOUD_STRATUS_FRAMES,
+} from './spriteManifest.js';
+
+const CLOUD_SPRITE_POOLS = {
+    cumulus: CLOUD_CUMULUS_FRAMES,
+    cirrus: CLOUD_CIRRUS_FRAMES,
+    stratus: CLOUD_STRATUS_FRAMES,
+};
 
 // Sky, celestials and clouds. Legitimately screen-space: the sun and moon
 // should read as infinitely distant, so they do not parallax at all.
@@ -37,6 +46,7 @@ export class Sky {
         this._phaseOverride = undefined;
         this.dayIndex = 0;
         this.cloudFreeDay = rngSeedless() > 0.5;
+        this.sunVariant = Math.floor(rngSeedless() * SUN_FRAMES.length);
         this.moonPhaseOffset = Math.floor(rngSeedless() * 28);
         this.stars = [];
         this.clouds = [];
@@ -78,6 +88,11 @@ export class Sky {
                 opacity: Math.random() * 0.3 + 0.4,
                 type,
                 noise: Math.random() * 0.2,
+                // Style variant this instance may draw instead of the
+                // procedural shape, chosen once so it's stable for the
+                // cloud's lifetime (same per-instance-random pattern as
+                // Tree/Rock in world/scenery.js).
+                spriteId: CLOUD_SPRITE_POOLS[type][Math.floor(Math.random() * CLOUD_SPRITE_POOLS[type].length)],
             };
             if (type === 'cumulus') {
                 c.y += this._h / 16;
@@ -118,6 +133,7 @@ export class Sky {
             if (day !== this.dayIndex) {
                 this.dayIndex = day;
                 this.cloudFreeDay = Math.random() > 0.5;
+                this.sunVariant = Math.floor(Math.random() * SUN_FRAMES.length);
             }
             this._phase = (fraction + PHASE_OFFSET) % 1;
         }
@@ -222,6 +238,23 @@ export class Sky {
         const progress = t >= 0.95 ? ((t - 0.95) / 0.05) * 0.25 : t + 0.25;
         const { x, y } = this._arc(progress, w, h, 0.1);
 
+        // this.sunVariant is rolled once per day (see update()), not by
+        // time of day - the art's own color IS the day's look, so this
+        // replaces the time-of-day tint below rather than picking a frame
+        // per t bucket the way the moon picks by phase.
+        const sprite = getSprite(SUN_FRAMES[this.sunVariant]);
+        if (sprite) {
+            // Sprite art already bakes in its own glow rings (unlike the
+            // moon's plain disc), so it's drawn bigger than the procedural
+            // circle's 30px radius to keep those rings visible, with no
+            // extra ctx.shadowBlur layered on top.
+            const size = 100;
+            const scale = size / sprite.width;
+            const w2 = sprite.width * scale, h2 = sprite.height * scale;
+            ctx.drawImage(sprite, x - w2 / 2, y - h2 / 2, w2, h2);
+            return;
+        }
+
         let r = 255, g = 255, b = 0;
         if (t >= 0.95 || t < 0.05) {
             const d = t >= 0.95 ? (t - 0.95) / 0.1 : (t + 0.05) / 0.1;
@@ -302,6 +335,25 @@ export class Sky {
 
         for (const c of this.clouds) {
             const o = clamp(vis * c.opacity, 0, 1);
+
+            const sprite = getSprite(c.spriteId);
+            if (sprite) {
+                // Target width matches each type's existing procedural
+                // footprint (cumulus/cirrus/stratus below use the same
+                // maxSize multipliers) so swapping in art doesn't change
+                // how much sky a cloud instance visually occupies; height
+                // follows the sprite's own aspect ratio rather than being
+                // forced, since silhouette shape varies a lot per variant.
+                const targetW = c.maxSize * (c.type === 'cumulus' ? 1.6 : c.type === 'cirrus' ? 2 : 2.5);
+                const scale = targetW / sprite.width;
+                const w = sprite.width * scale, h = sprite.height * scale;
+                ctx.save();
+                ctx.globalAlpha = o;
+                ctx.drawImage(sprite, c.x - w / 2, c.y - h / 2, w, h);
+                ctx.restore();
+                continue;
+            }
+
             if (c.type === 'cumulus') {
                 ctx.beginPath();
                 ctx.ellipse(c.x + c.shadow.ox, c.y + c.shadow.oy, c.maxSize * 0.5, c.maxSize * 0.3, 0, 0, Math.PI * 2);

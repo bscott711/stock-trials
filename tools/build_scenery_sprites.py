@@ -75,22 +75,56 @@ SHEETS = [
         ("wildflower-clump", 6),
         ("fence-post", 6),
     ]),
+    # A plain 2x6 grid, no captions - one row_gap_px bigger than the ~28px
+    # gap between the two grid rows merges them into a single 12-item pool
+    # (order doesn't matter, sun.js picks one at random per day).
+    (f"{SPRITE_ROOT}/sky/sun/spritesheet.png", "sky/sun", 50, [
+        ("sun", 12),
+    ]),
+    # Each cloud type came as two separate sheets (no captions/labels on
+    # either) - a single row of 5, and a denser 3x4 grid of 12. Continuing
+    # the index via start_index instead of starting both at 0 keeps every
+    # variant from both files in the one pool cloud rendering picks from.
+    (f"{SPRITE_ROOT}/sky/clouds/cumulus.png", "sky/clouds", 60, [
+        ("cumulus", 5, 0),
+    ]),
+    (f"{SPRITE_ROOT}/sky/clouds/cumulus_pt2.png", "sky/clouds", 40, [
+        ("cumulus", 4, 5),
+        ("cumulus", 4, 9),
+        ("cumulus", 4, 13),
+    ]),
+    # stratus.png is a loose, non-grid layout (2/1/2 across 3 visual
+    # sub-rows) with nothing else on the sheet to accidentally merge with,
+    # so a huge row_gap_px just folds every sub-row into one 5-item band.
+    (f"{SPRITE_ROOT}/sky/clouds/stratus.png", "sky/clouds", 900, [
+        ("stratus", 5, 0),
+    ]),
 ]
 
 
-def remove_background(path_in, tolerance=14):
-    """Flood-fill transparency from the border inward, matching pixels
-    within `tolerance` of the sampled corner color. Only background
-    connected to the border becomes transparent, so light details fully
-    enclosed inside the artwork are left alone. Ported from
-    build_player_sprites.py.
+def remove_background_arr(arr, tolerance=14):
+    """Flood-fill transparency from THIS ARRAY'S OWN border inward, matching
+    pixels within `tolerance` of its own border color. Only background
+    connected to the array's border becomes transparent, so light details
+    fully enclosed inside the artwork are left alone. Operating per-array
+    (not just once on the whole sheet) matters for a ruled grid sheet: a
+    cell fully enclosed by border lines has no path for a whole-sheet
+    flood-fill to reach its interior white background at all, leaving it
+    opaque - see slice_grid, which calls this once per cell on just that
+    cell's own pixels. Ported from build_player_sprites.py.
+
+    Background color is the MEDIAN of every border pixel, not just the 4
+    corners - a grid cell's corner can land right on a ruled border line
+    (especially once its inset is nudged to clear other artifacts), and a
+    single bad corner poisons a corner-only estimate badly enough that nothing
+    reads as background anymore. The median shrugs off a few line/art pixels
+    among the hundreds of genuine background pixels around a cell's edge.
     """
-    img = Image.open(path_in).convert("RGBA")
-    arr = np.array(img)
+    arr = arr.copy()
     rgb = arr[..., :3].astype(np.int16)
     h, w = rgb.shape[:2]
-    corners = np.array([rgb[0, 0], rgb[0, w - 1], rgb[h - 1, 0], rgb[h - 1, w - 1]], dtype=np.float64)
-    bg = corners.mean(axis=0)
+    border = np.concatenate([rgb[0, :], rgb[-1, :], rgb[:, 0], rgb[:, -1]])
+    bg = np.median(border, axis=0)
     diff = np.abs(rgb - bg).max(axis=-1)
     bg_like = diff <= tolerance
     labels, _ = ndimage.label(bg_like, structure=np.ones((3, 3)))
@@ -100,6 +134,11 @@ def remove_background(path_in, tolerance=14):
     remove_mask = np.isin(labels, list(border_labels))
     arr[remove_mask, 3] = 0
     return arr
+
+
+def remove_background(path_in, tolerance=14):
+    img = Image.open(path_in).convert("RGBA")
+    return remove_background_arr(np.array(img), tolerance)
 
 
 def split_wide(mask, b, target_parts):
@@ -147,8 +186,14 @@ def split_wide(mask, b, target_parts):
 
 def detect_rows(arr, text_max_h=TEXT_MAX_H, min_area=150, row_gap_px=60, expected_counts=None):
     alpha = arr[..., 3] > 8
-    closed = ndimage.binary_closing(alpha, structure=np.ones((3, 3)), iterations=2)
-    labels, n = ndimage.label(closed, structure=np.ones((3, 3)))
+    # No binary_closing: it was bridging the few-px gap between a category
+    # caption (e.g. "ANGULAR BOULDERS") and the art directly below it into
+    # one fused component - since the combined height clears text_max_h,
+    # the text was never getting filtered out (baked into mountains/
+    # boulder-0.png as visible caption text). Raw 8-connectivity already
+    # gives every sheet its correct component count (checked against every
+    # row's expected_counts), so nothing here actually needed closing.
+    labels, n = ndimage.label(alpha, structure=np.ones((3, 3)))
     boxes = []
     for i in range(1, n + 1):
         mask = labels == i
@@ -216,18 +261,90 @@ def crop(arr, b, pad=PAD):
     return sub
 
 
+# A handful of sheets came as an explicit bordered grid (with a title bar
+# and/or a small per-cell number label) rather than a loose contact sheet -
+# connected-component labeling would just pick up the border lines and
+# labels as extra junk "sprites", so these are sliced by known cell
+# geometry instead: explicit (start,end) pixel spans per row and per
+# column (even_spans() for a plain grid, hand-measured for one with a
+# title bar - see below), inset by (top,right,bottom,left) to clear the
+# border/label, then tightly crop whatever ink remains inside that inset.
+#
+# (sheet path, output dir, row_spans, col_spans, inset, slug, start_index)
+def even_spans(total, n, offset=0):
+    step = (total - offset) / n
+    return [(int(round(offset + i * step)), int(round(offset + (i + 1) * step))) for i in range(n)]
+
+
+GRID_SHEETS = [
+    # 1x4, thin vertical divider lines between cells, no title/labels.
+    (f"{SPRITE_ROOT}/sky/clouds/cirrus.png", "sky/clouds",
+     even_spans(512, 1), even_spans(2064, 4), (5, 15, 5, 15), "cirrus", 0),
+    # 4x3 with a title bar and ruled borders (no per-cell labels). Spans are
+    # the exact gridline pixel rows/cols measured from the sheet, NOT
+    # even_spans() - the ~50px of slack below the last row (whatever margin
+    # the sheet has past the grid before the image edge) would otherwise get
+    # divided into every row's height too, so an evenly-computed cell would
+    # run ~13px taller than the real one and cross into the next cell's
+    # border/content.
+    (f"{SPRITE_ROOT}/sky/clouds/cirrus_pt2.png", "sky/clouds",
+     [(94, 249), (251, 406), (408, 562), (564, 718)],
+     [(43, 484), (486, 921), (922, 1364)],
+     (4, 4, 4, 4), "cirrus", 4),
+    # 4x3, ruled borders AND a small number label in each cell's top-left -
+    # no title bar, and no leftover margin past the grid (confirmed one
+    # measured gridline landed exactly on the even-split boundary), so
+    # even_spans() is safe here. Generous top/left inset clears both the
+    # label and the border.
+    (f"{SPRITE_ROOT}/sky/clouds/stratus_pt2.png", "sky/clouds",
+     even_spans(848, 4), even_spans(1264, 3), (35, 20, 20, 35), "stratus", 5),
+]
+
+
+def slice_grid(path, row_spans, col_spans, inset, pad=PAD, min_area=150):
+    # Background removal happens PER CELL (remove_background_arr on each
+    # cell's own pixels), not once for the whole sheet - a cell fully
+    # enclosed by ruled border lines has no path for a whole-sheet flood-
+    # fill to ever reach its interior white background, leaving it opaque
+    # (baked into cirrus/stratus-N.png as a visible white box).
+    raw = np.array(Image.open(path).convert("RGBA"))
+    inset_top, inset_right, inset_bottom, inset_left = inset
+
+    crops = []
+    for ry0, ry1 in row_spans:
+        for cx0, cx1 in col_spans:
+            y0, y1 = ry0 + inset_top, ry1 - inset_bottom
+            x0, x1 = cx0 + inset_left, cx1 - inset_right
+
+            arr = remove_background_arr(raw[y0:y1, x0:x1])
+            alpha = arr[..., 3] > 8
+            ys, xs = np.where(alpha)
+            if ys.size < min_area:
+                continue
+            ay0, ay1 = max(0, ys.min() - pad), min(alpha.shape[0], ys.max() + pad + 1)
+            ax0, ax1 = max(0, xs.min() - pad), min(alpha.shape[1], xs.max() + pad + 1)
+            crops.append(arr[ay0:ay1, ax0:ax1].copy())
+    return crops
+
+
 def main():
     report_only = "--report" in sys.argv
     for sheet_path, out_dir, row_gap_px, categories in SHEETS:
+        # 3rd element (start_index) is optional - defaults to 0. Sheets that
+        # continue a pool another sheet started (e.g. cumulus_pt2.png after
+        # cumulus.png) set it so both files' variants land in one
+        # contiguous 0..N-1 id run instead of the second overwriting the
+        # first's output files.
+        categories = [(c[0], c[1], c[2] if len(c) > 2 else 0) for c in categories]
         print(f"\n=== {sheet_path} ===")
         arr = remove_background(sheet_path)
-        rows = detect_rows(arr, row_gap_px=row_gap_px, expected_counts=[c for _, c in categories])
+        rows = detect_rows(arr, row_gap_px=row_gap_px, expected_counts=[c[1] for c in categories])
         print(f"detected {len(rows)} art rows: {[len(r) for r in rows]}  "
-              f"(expected {[c for _, c in categories]})")
+              f"(expected {[c[1] for c in categories]})")
         if len(rows) != len(categories):
             print("  !! row count mismatch, skipping writes for this sheet - inspect manually")
             continue
-        for row, (slug, expected) in zip(rows, categories):
+        for row, (slug, expected, start_index) in zip(rows, categories):
             if len(row) != expected:
                 print(f"  !! {slug}: found {len(row)}, expected {expected} - inspect manually")
             if report_only:
@@ -238,8 +355,23 @@ def main():
             os.makedirs(out_subdir, exist_ok=True)
             for i, b in enumerate(row):
                 sub = crop(arr, b)
-                Image.fromarray(sub, "RGBA").save(os.path.join(out_subdir, f"{slug}-{i}.png"))
-            print(f"  {slug}: wrote {len(row)} -> {out_subdir}/{slug}-N.png")
+                Image.fromarray(sub, "RGBA").save(os.path.join(out_subdir, f"{slug}-{start_index + i}.png"))
+            print(f"  {slug}: wrote {len(row)} -> {out_subdir}/{slug}-{start_index}..{start_index + len(row) - 1}.png")
+
+    for sheet_path, out_dir, row_spans, col_spans, inset, slug, start_index in GRID_SHEETS:
+        print(f"\n=== {sheet_path} (grid {len(row_spans)}x{len(col_spans)}) ===")
+        crops = slice_grid(sheet_path, row_spans, col_spans, inset)
+        expected = len(row_spans) * len(col_spans)
+        if len(crops) != expected:
+            print(f"  !! found {len(crops)} cells, expected {expected} - inspect manually")
+        if report_only:
+            print(f"  {slug}: {len(crops)} items, sizes={[im.shape[1::-1] for im in crops]}")
+            continue
+        out_subdir = os.path.join("version_2/assets/sprites", out_dir)
+        os.makedirs(out_subdir, exist_ok=True)
+        for i, sub in enumerate(crops):
+            Image.fromarray(sub, "RGBA").save(os.path.join(out_subdir, f"{slug}-{start_index + i}.png"))
+        print(f"  {slug}: wrote {len(crops)} -> {out_subdir}/{slug}-{start_index}..{start_index + len(crops) - 1}.png")
 
 
 if __name__ == "__main__":
