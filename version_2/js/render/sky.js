@@ -1,4 +1,6 @@
 import { lerpColor, rgb, clamp } from '../core/math.js';
+import { getSprite } from './assets.js';
+import { MOON_PHASE_FRAMES } from './spriteManifest.js';
 
 // Sky, celestials and clouds. Legitimately screen-space: the sun and moon
 // should read as infinitely distant, so they do not parallax at all.
@@ -253,6 +255,23 @@ export class Sky {
         ctx.save();
         ctx.shadowBlur = 18;
         ctx.shadowColor = 'rgba(255, 255, 255, 0.5)';
+
+        // MOON_PHASE_FRAMES[0..7] are new, waxing crescent, first quarter,
+        // waxing gibbous, full, waning gibbous, last quarter, waning
+        // crescent in order (tools/build_moon_sprites.py) - phase 0..1 maps
+        // onto those 8 evenly-spaced points the same way phase 0.25/0.5/0.75
+        // already line up with first-quarter/full/last-quarter below, so a
+        // sprite is just picked by nearest bucket instead of drawn.
+        const frameCount = MOON_PHASE_FRAMES.length;
+        const sprite = getSprite(MOON_PHASE_FRAMES[Math.round(phase * frameCount) % frameCount]);
+
+        if (sprite) {
+            const size = radius * 2;
+            ctx.drawImage(sprite, x - size / 2, y - size / 2, size, size);
+            ctx.restore();
+            return;
+        }
+
         ctx.beginPath();
         ctx.arc(x, y, radius, 0, Math.PI * 2);
         ctx.fillStyle = 'rgb(245, 245, 235)';

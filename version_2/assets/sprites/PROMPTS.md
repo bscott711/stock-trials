@@ -124,6 +124,68 @@ Run: `uv run tools/build_player_rig.py <clip.mp4> version_2/assets/sprites/playe
 | 14 | Small wildflower clump, a few green stems, 4-5 simple colorful flower dots. Canvas 70×70px, bottom-weighted (base near x=35,y=60). | `fields/wildflower-clump.png` |
 | 15 | Weathered wooden fence post, 1-2 short horizontal rail stubs. Canvas 40×100px, bottom-center anchored. | `fields/fence-post.png` |
 
+## Sky
+
+The sun, moon, and clouds are drawn procedurally in `js/render/sky.js` -
+screen-space overlays (fixed on-screen size, not scaled by world distance
+like the biome scenery above). Unlike Woods/Beach/Mountains/Fields' tables
+above (written before it became clear image-gen tools deliver a labeled
+contact sheet of variants more reliably than one clean file per request),
+the Sun and Clouds rows below ask for that contact-sheet form directly:
+one sheet per category, plain solid white background, several variants
+side by side in the exact left-to-right order noted, sliced afterward the
+same way `tools/build_scenery_sprites.py` already handles the biome sheets
+- add a `SHEETS` entry there for each row once the art exists (row order
+already matches the index order needed, since the script's row-detection
+just reads variants left to right within a band). The Moon row instead
+uses the Player rig's video approach (see below) - already done, wired
+into `js/render/sky.js`, and `sky/moon/moon-0.png` … `moon-7.png` exist.
+
+Sun and moon variants are **sequential states**, not random style
+choices - whatever wires the sliced sprites in should pick by time-of-day
+/ lunar-phase index (the way `player.rig0..rig5` are picked by pedal-angle
+bucket), not at random like a tree or rock. Cloud variants ARE random
+style choices, same as the biome clutter above.
+
+### Sun
+
+| # | Subject + sizing | Save as |
+|---|---|---|
+| 16 | Sun disc with a soft radiating glow, 3 variants left-to-right for time of day, in this order: warm golden-yellow (midday), deeper orange (late afternoon), red-orange (sunrise/sunset). `_drawSun()` currently fills a flat ~60px-diameter circle with a blurred glow - match that proportion. Canvas 160×160px per variant, disc centered, glow allowed to bleed toward the frame edge. | `sky/sun/spritesheet.png` |
+
+### Moon
+
+Done the same way as the Player rig, not as a static contact sheet: generate
+a short **video**, not a still image - a locked-off, static-camera clip of a
+flat-vector moon disc animating through one full lunar cycle (new → full →
+new), plain solid light background, no camera pan/zoom/drift, crater
+shading and a lit/unlit split like `_drawMoon()`'s current off-white
+(`rgb(245,245,235)`-ish) disc. `tools/build_moon_sprites.py` pulls 8
+evenly-spaced frames out of it and turns them into `sky/moon/moon-0.png` …
+`moon-7.png`, in this order: new, waxing crescent, first quarter, waxing
+gibbous, full, waning gibbous, last quarter, waning crescent - matching
+`js/render/sky.js`'s existing `phase` value (0=new, 0.25=first quarter,
+0.5=full, 0.75=last quarter), which is already wired to pick between them
+by index.
+
+Run: `uv run tools/build_moon_sprites.py <clip.mp4> version_2/assets/sprites/sky/moon --frames <8 comma-separated indices>`
+- **Picking `--frames`:** if the cycle runs at an even pace across the
+  whole clip (sample every 10th frame first and eyeball it - a real lunar
+  cycle animation usually does, since there's no reason for a renderer to
+  ease it), 8 evenly-spaced indices across the clip's full frame count land
+  close enough to the 8 named phases. See the script's docstring.
+
+### Clouds
+
+`_drawClouds()` currently has three distinct procedural shapes rather than
+one generic cloud - generate each as its own sheet of style variants:
+
+| # | Subject + sizing | Save as |
+|---|---|---|
+| 18 | Puffy cumulus cloud, 4-5 variants, rounded overlapping lobes, flat-shaded white/pale-grey with a slightly darker, flatter underside. Canvas 500×260px per variant, center-anchored, noticeably wider than tall. | `sky/cumulus/spritesheet.png` |
+| 19 | Wispy cirrus cloud, 4-5 variants, thin curved streaks/strands, sparse and airy rather than a solid mass. Canvas 500×160px per variant, center-anchored. | `sky/cirrus/spritesheet.png` |
+| 20 | Flat stratus cloud band, 4-5 variants, a low horizontal layer with a soft feathered edge. Canvas 600×140px per variant, center-anchored. | `sky/stratus/spritesheet.png` |
+
 ## Notes on sizing
 
 - **Trees/tall objects** are drawn bottom-anchored and scaled so the drawn
@@ -134,12 +196,19 @@ Run: `uv run tools/build_player_rig.py <clip.mp4> version_2/assets/sprites/playe
 - **Clutter (logs, driftwood, boulders, hay bales, flowers, posts, snow
   patches)** are drawn center-anchored and scaled off their pixel *width* as
   a stand-in diameter.
+- **Sky objects (sun, moon, clouds)** are also center-anchored and scaled
+  off pixel width like clutter, but against a fixed on-screen target size
+  instead of a world-unit one, since they don't move with the camera - see
+  the Sun/Moon/Clouds rows above for the current on-screen size each is
+  matching.
 - **Leg/torso frames**: `build_player_sprites.py` auto-detects each frame's
   hip anchor and normalizes every frame in a group onto a shared canvas so
   they all land on the same anchor point — exact pixel dimensions aren't
   critical, but keeping the hip at roughly the same relative spot across
   every pose in a row is what keeps the pedaling/sway from visibly jumping
   frame to frame.
-- 14 sprite groups (11 world + player frame/legs/torso/wheels) are required
-  to cover every biome and get the player fully animated; the items marked
-  *(optional)* round each biome out to 3-4 pieces.
+- Counting every category above (biome scenery, sky, and the player rig) is
+  16 world groups + the player rig, all optional in the sense that each
+  degrades independently back to its procedural look when missing - none
+  are required just to get the game running, only to get sprite art
+  instead of shapes for that particular piece.

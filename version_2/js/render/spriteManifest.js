@@ -57,6 +57,14 @@ const FIELDS_HAY_BALE = variantIds('fields.hayBale', 8);
 const FIELDS_WILDFLOWER_CLUMP = variantIds('fields.wildflowerClump', 6);
 const FIELDS_FENCE_POST = variantIds('fields.fencePost', 6);
 
+// The moon's 8 phase frames, extracted from one locked-off video of a full
+// lunar cycle (tools/build_moon_sprites.py) rather than drawn as separate
+// style variants - unlike the biome pools above, these are picked by
+// PHASE INDEX (js/render/sky.js maps its existing 0..1 phase value onto
+// this array), not at random, since a moon only ever looks like whichever
+// phase it actually is right now.
+export const MOON_PHASE_FRAMES = variantIds('sky.moon', 8);
+
 export const SPRITE_MANIFEST = [
     ...PLAYER_RIG_FRAMES.map((id, i) => ({ id, path: `${BASE}/player/rig-${i}.png` })),
 
@@ -74,6 +82,8 @@ export const SPRITE_MANIFEST = [
     ...variantEntries('fields.hayBale', 'fields', 'hay-bale', FIELDS_HAY_BALE.length),
     ...variantEntries('fields.wildflowerClump', 'fields', 'wildflower-clump', FIELDS_WILDFLOWER_CLUMP.length),
     ...variantEntries('fields.fencePost', 'fields', 'fence-post', FIELDS_FENCE_POST.length),
+
+    ...variantEntries('sky.moon', 'sky/moon', 'moon', MOON_PHASE_FRAMES.length),
 ];
 
 // Which sprites a Tree instance (tall, bottom-anchored) vs a Rock instance
