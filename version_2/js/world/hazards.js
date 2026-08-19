@@ -1,29 +1,37 @@
 import { mulberry32 } from '../core/rng.js';
 import { getSprite } from '../render/assets.js';
+import { BIOME_CLUTTER_SPRITES } from '../render/spriteManifest.js';
 
 // Ground-anchored obstacles that crash the bike on contact, generated lazily
 // per segment exactly like world/scenery.js's rocks/trees and
 // world/pickups.js's cash/dividends (seeded per-segment RNG so re-entry
-// rebuilds identically, cull-and-evict draw()). No sprite art exists for
-// these yet, so they always fall back to the procedural draw below - same
-// "sprite optional" contract as Pickup.
+// rebuilds identically, cull-and-evict draw()).
 //
-// Two kinds, both requiring a real reaction, not a rare surprise: a common,
-// low 'puddle' any real hop clears, and a rarer, taller 'wall' that only
-// clears near the top of a jump's arc - biased into choppier terrain via
-// terrain.localVolatility, the same stretches pickups already bias
-// elevated, higher-value pickups into. Every segment spawns at least one, so
-// riding without ever jumping is guaranteed to end the run before long
-// rather than being something that just happens to a player eventually.
+// Three kinds, all requiring a real reaction, not a rare surprise: two
+// common, low kinds any real hop clears ('puddle', procedural, and 'log',
+// the same fallen-log art scenery.js already draws as decoration - reused
+// here as an actual obstacle instead of only ever being background), and a
+// rarer, taller 'wall' that only clears near the top of a jump's arc -
+// biased into choppier terrain via terrain.localVolatility, the same
+// stretches pickups already bias elevated, higher-value pickups into. Every
+// segment spawns at least one, so riding without ever jumping is guaranteed
+// to end the run before long rather than being something that just happens
+// to a player eventually.
 //
 // Like Pickup, `y` is the single anchor used for BOTH drawing and hit
 // testing (main.js's hazards.hits() call), not the ground contact point -
-// `groundY` is kept separately just so the procedural draw can still root
-// the silhouette at the terrain surface.
+// `groundY` is kept separately just so the procedural/sprite draw can still
+// root the silhouette at the terrain surface.
+
+// woods/fallen-log-*.png, minus variants 1 and 5 - those two are thin, flat
+// logs that read fine as background clutter but too small to sell as
+// something you actually need to jump.
+const LOG_SPRITES = BIOME_CLUTTER_SPRITES.woods.filter((_, i) => i !== 1 && i !== 5);
 
 const SEGMENT = 3000;
 const SAFE_START_X = 1000; // no hazard before this - the player needs a runway
 const WALL_CHANCE = 0.3;
+const LOG_CHANCE = 0.5; // of the non-wall rolls, how many skin as a log vs a puddle
 
 // A grounded bike's axle sits at groundY - WHEEL_R (30, game/bike.js), and
 // main.js tests hits with a ~34 radius (HAZARD_HIT_RADIUS), so clearing a
@@ -46,26 +54,67 @@ const PUDDLE_VISUAL_WIDTH = 64;
 const PUDDLE_VISUAL_HEIGHT = 22;
 const WALL_VISUAL_WIDTH = 30;
 const WALL_VISUAL_HEIGHT = 64;
-const SPRITE_TARGET_SIZE = 56;
+const LOG_VISUAL_WIDTH = 74;
+const LOG_VISUAL_HEIGHT = 24;
 
 class Hazard {
-    constructor(x, groundY, anchorHeight, kind) {
+    constructor(x, groundY, anchorHeight, kind, rng) {
         this.x = x;
         this.groundY = groundY;
         this.y = groundY - anchorHeight;
         this.kind = kind;
+        // Picked once so it's stable across re-entry, same per-instance-
+        // random pattern as Rock/Tree's spriteId in world/scenery.js.
+        this.spriteId = kind === 'log' ? LOG_SPRITES[Math.floor(rng() * LOG_SPRITES.length)] : null;
     }
 
     draw(ctx) {
-        const img = getSprite(this.kind === 'wall' ? 'hazard.wall' : 'hazard.puddle');
-        if (img) {
-            const s = SPRITE_TARGET_SIZE / img.width;
-            const w = img.width * s, h = img.height * s;
-            ctx.drawImage(img, this.x - w / 2, this.groundY - h, w, h);
+        if (this.kind === 'log') {
+            const img = this.spriteId && getSprite(this.spriteId);
+            if (img) {
+                const scale = LOG_VISUAL_WIDTH / img.width;
+                const w = img.width * scale, h = img.height * scale;
+                // Center-anchored at ground level, same convention as the
+                // decorative clutter this art is shared with (world/scenery.js's
+                // Rock) - a log lying across the trail has no single "trunk
+                // base" the way a standing tree does.
+                ctx.drawImage(img, this.x - w / 2, this.groundY - h / 2, w, h);
+                return;
+            }
+
+            const w = LOG_VISUAL_WIDTH, h = LOG_VISUAL_HEIGHT;
+            const cy = this.groundY;
+            ctx.beginPath();
+            ctx.moveTo(this.x - w / 2, cy - h / 2);
+            ctx.lineTo(this.x + w / 2, cy - h / 2);
+            ctx.arc(this.x + w / 2, cy, h / 2, -Math.PI / 2, Math.PI / 2);
+            ctx.lineTo(this.x - w / 2, cy + h / 2);
+            ctx.arc(this.x - w / 2, cy, h / 2, Math.PI / 2, -Math.PI / 2);
+            ctx.closePath();
+            ctx.fillStyle = '#6b4a2f';
+            ctx.strokeStyle = '#3a2818';
+            ctx.lineWidth = 2;
+            ctx.fill();
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.ellipse(this.x + w / 2 - h * 0.18, cy, h * 0.32, h * 0.42, 0, 0, Math.PI * 2);
+            ctx.strokeStyle = '#4a3320';
+            ctx.stroke();
             return;
         }
 
         if (this.kind === 'wall') {
+            const img = getSprite('hazard.wall');
+            if (img) {
+                // Bottom-anchored and scaled by HEIGHT, like Tree in
+                // world/scenery.js - a wall reads as a standing obstacle
+                // with one base on the ground, not flat ground clutter.
+                const scale = WALL_VISUAL_HEIGHT / img.height;
+                const w = img.width * scale, h = img.height * scale;
+                ctx.drawImage(img, this.x - w / 2, this.groundY - h, w, h);
+                return;
+            }
+
             const w = WALL_VISUAL_WIDTH, h = WALL_VISUAL_HEIGHT;
             ctx.fillStyle = '#b5342c';
             ctx.strokeStyle = '#4a1310';
@@ -77,6 +126,17 @@ class Hazard {
             ctx.fillRect(this.x - w / 2, this.groundY - h, w, stripeH);
             ctx.fillRect(this.x - w / 2, this.groundY - h + stripeH * 2, w, stripeH);
         } else {
+            const img = getSprite('hazard.puddle');
+            if (img) {
+                // Bottom-anchored and scaled by WIDTH, like Rock/clutter in
+                // world/scenery.js - a puddle is flat ground cover, not a
+                // standing object.
+                const scale = PUDDLE_VISUAL_WIDTH / img.width;
+                const w = img.width * scale, h = img.height * scale;
+                ctx.drawImage(img, this.x - w / 2, this.groundY - h, w, h);
+                return;
+            }
+
             // Flush with the ground and unmissably blue, rather than
             // something that could be mistaken for scenery.js's earth-toned
             // decorative rocks.
@@ -119,12 +179,12 @@ export class HazardField {
             const groundY = this.terrain.sampleY(x);
             const volatility = this.terrain.localVolatility(x);
 
-            const kind = rng() < WALL_CHANCE ? 'wall' : 'puddle';
+            const kind = rng() < WALL_CHANCE ? 'wall' : (rng() < LOG_CHANCE ? 'log' : 'puddle');
             const anchorHeight = kind === 'wall'
                 ? WALL_ANCHOR_MIN + volatility * WALL_ANCHOR_RANGE * rng()
                 : PUDDLE_ANCHOR_MIN + rng() * PUDDLE_ANCHOR_RANGE;
 
-            hazards.push(new Hazard(x, groundY, anchorHeight, kind));
+            hazards.push(new Hazard(x, groundY, anchorHeight, kind, rng));
         }
 
         seg = hazards;
