@@ -1,7 +1,7 @@
 import { createLoop } from './core/loop.js';
 import { Camera } from './core/camera.js';
 import { Input } from './core/input.js';
-import { hashString } from './core/rng.js';
+import { hashString, mulberry32 } from './core/rng.js';
 import { Terrain, PIXELS_PER_DAY } from './world/terrain.js';
 import { Scenery } from './world/scenery.js';
 import { PickupField } from './world/pickups.js';
@@ -42,7 +42,12 @@ async function main() {
 
     const camera = new Camera();
     const renderer = new Renderer(canvas);
-    const sky = new Sky();
+    // Sky's initial cloud/sun/moon rolls otherwise default to Math.random(),
+    // which is the one piece of "the world" not reproducible from the seed
+    // the way terrain/scenery/pickups/hazards already are - every run opened
+    // the night sky in the same moon phase regardless of ticker/seed. Salted
+    // so it doesn't just replay Terrain's own first rng() calls verbatim.
+    const sky = new Sky(mulberry32((seed ^ 0x50A1E9F1) >>> 0));
     const terrain = new Terrain(seed);
     const scenery = new Scenery(terrain, seed);
     const pickups = new PickupField(terrain, seed);
