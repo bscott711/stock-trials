@@ -130,16 +130,21 @@ Ground obstacles from `js/world/hazards.js` that crash the bike on contact -
 unlike the biome scenery above, these aren't decorative, so silhouette
 readability at speed matters more than any one design.
 
-**Wall: done.** `assets/sprites/barricades/more_variations.png` (a 30-cell
-hand-made contact sheet mixing wood/rope, stone/wheel, and icy-mountain
-barricade designs) is sliced by `tools/build_barricade_sprites.py` into
-`hazards/wall-0.png` … `wall-29.png`, wired in as `HAZARD_WALL_SPRITES` in
-`js/render/spriteManifest.js` and picked at random per instance the same way
-Rock/Tree pick a biome clutter sprite - style variety doesn't hurt
-readability here since every design already reads as "obstacle" on sight,
-unlike a single hazard that needs one fixed, learnable silhouette. If more
-wall variety ever gets added, drop another same-style contact sheet next to
-`more_variations.png` and extend the tool rather than hand-slicing it.
+**Wall: done.** `tools/build_barricade_sprites.py` slices every
+`assets/sprites/barricades/*.png` sheet into `hazards/wall-0.png` …
+`wall-35.png`: 30 from `more_variations.png`'s grid (wood/rope, stone/wheel,
+and icy-mountain barricade designs mixed together) plus 6 higher-detail
+"hero" takes on some of those same designs from `beach.png`/`forest.png`/
+`mountain.png` (each a captioned 2-up showcase sheet - the tool's second
+pass strips the captions by component height, no row/column bookkeeping
+needed since there's just one big illustration per side). All 36 land in
+one pool, wired in as `HAZARD_WALL_SPRITES` in `js/render/spriteManifest.js`
+and picked at random per instance the same way Rock/Tree pick a biome
+clutter sprite - style variety doesn't hurt readability here since every
+design already reads as "obstacle" on sight, unlike a single hazard that
+needs one fixed, learnable silhouette. If more wall variety ever gets
+added, drop another same-shape sheet next to its siblings in `barricades/`
+and extend the tool rather than hand-slicing it.
 
 **Puddle: still needed**, one canonical image (no style-variant pool) - its
 murky water needs to look the same every time so a player learns the shape

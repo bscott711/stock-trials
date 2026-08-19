@@ -2,21 +2,21 @@
 # requires-python = ">=3.11"
 # dependencies = ["pillow", "numpy", "scipy"]
 # ///
-"""Slice assets/sprites/barricades/more_variations.png into individual
-hazard-wall sprites at the path js/render/spriteManifest.js expects
-(hazards/wall-0.png .. wall-N.png).
+"""Slice the barricades/ sheets into individual hazard-wall sprites at the
+path js/render/spriteManifest.js expects (hazards/wall-0.png .. wall-N.png).
 
-Unlike the sheets tools/build_scenery_sprites.py handles, this one is a pure
-grid with no captions AND no uniform cell size - it's two side-by-side
-blocks (a "wood/rope" block, an "ice/stone" block), each 4 rows tall, but
-individual item WIDTH varies row to row (some rows are 3 wide items, others
-4 narrower ones) and item HEIGHT varies too (the icy rows run much taller
-than the wood rows). Neither of build_scenery_sprites.py's two slicing modes
-fits: detect_rows' caption-height filter has nothing to filter (no
-captions), and GRID_SHEETS' even_spans()/fixed spans assume uniform cells,
-which cuts several of the wider items in half here.
+Two different sheet shapes, handled in two passes that share one output
+index so every sprite lands in one contiguous 0..N-1 pool:
 
-Approach instead:
+PASS 1 - more_variations.png: a pure grid with no captions AND no uniform
+cell size - two side-by-side blocks (a "wood/rope" block, an "ice/stone"
+block), each 4 rows tall, but individual item WIDTH varies row to row (some
+rows are 3 wide items, others 4 narrower ones) and item HEIGHT varies too
+(the icy rows run much taller than the wood rows). Neither of
+build_scenery_sprites.py's two slicing modes fits: detect_rows' caption-
+height filter has nothing to filter (no captions), and GRID_SHEETS'
+even_spans()/fixed spans assume uniform cells, which cuts several of the
+wider items in half here. Approach instead:
   1. Column split per half is fixed (measured once from the sheet's outer
      margins - see LEFT_X0/LEFT_X1/RIGHT_X0/RIGHT_X1).
   2. Row Y-bands are fixed too (ROWS_Y, measured from the sheet's actual
@@ -35,6 +35,17 @@ Approach instead:
      a design's disjoint parts (e.g. a dropped chain lying just apart from
      the ice blocks) still save as one sprite.
 
+PASS 2 - beach.png/forest.png/mountain.png: two big "hero" illustrations per
+sheet (each a higher-detail, differently-composed take on a design also
+present in more_variations.png - still worth keeping as separate pool
+entries for the extra variety, not just discarding as a duplicate) with
+bold captions above (and, on forest.png, below too). This one DOES fit
+build_scenery_sprites.py's height-filter idea, just simpler: every caption
+component tops out under 60px tall, every illustration is 450px+, so
+SHOWCASE_MIN_ART_H separates them outright with no row/column bookkeeping
+needed - connected-component label the sheet, keep only components taller
+than that, sort left to right, done.
+
 Usage:
     uv run tools/build_barricade_sprites.py --report   # detect + print only
     uv run tools/build_barricade_sprites.py             # detect + write PNGs
@@ -46,6 +57,12 @@ from PIL import Image
 from scipy import ndimage
 
 SHEET = "version_2/assets/sprites/barricades/more_variations.png"
+SHOWCASE_SHEETS = [
+    "version_2/assets/sprites/barricades/beach.png",
+    "version_2/assets/sprites/barricades/forest.png",
+    "version_2/assets/sprites/barricades/mountain.png",
+]
+SHOWCASE_MIN_ART_H = 300  # captions top out ~55px tall; art components are 450px+
 OUT_DIR = "version_2/assets/sprites/hazards"
 SLUG = "wall"
 PAD = 6
@@ -111,15 +128,17 @@ def find_boundaries(ink, n_items, min_sep=60, edge_margin=20):
     return [0] + sorted(picked) + [w]
 
 
-def main():
-    report_only = "--report" in sys.argv
+def _save_or_report(sub, index, label, report_only):
+    if report_only:
+        print(f"  {label}: {sub.shape[1]}x{sub.shape[0]}")
+    else:
+        Image.fromarray(sub).save(f"{OUT_DIR}/{SLUG}-{index}.png")
+
+
+def slice_grid_sheet(report_only, index):
     raw = np.array(Image.open(SHEET).convert("RGBA"))
     raw_rgb = np.array(Image.open(SHEET).convert("RGB"))
 
-    if not report_only:
-        os.makedirs(OUT_DIR, exist_ok=True)
-
-    index = 0
     for half, (hx0, hx1) in [("L", (LEFT_X0, LEFT_X1)), ("R", (RIGHT_X0, RIGHT_X1))]:
         for ri, (y0, y1) in enumerate(ROWS_Y):
             n = COUNTS[(half, ri)]
@@ -143,12 +162,48 @@ def main():
                 ax0, ax1 = max(0, xs.min() - PAD), min(alpha.shape[1], xs.max() + PAD + 1)
                 sub = cell[ay0:ay1, ax0:ax1].copy()
                 sub[~keep[ay0:ay1, ax0:ax1], 3] = 0
-                if report_only:
-                    print(f"  {half}{ri}{ci}: {sub.shape[1]}x{sub.shape[0]}")
-                    index += 1
-                    continue
-                Image.fromarray(sub).save(f"{OUT_DIR}/{SLUG}-{index}.png")
+                _save_or_report(sub, index, f"{half}{ri}{ci}", report_only)
                 index += 1
+    return index
+
+
+def slice_showcase_sheets(report_only, index):
+    for sheet_path in SHOWCASE_SHEETS:
+        raw = np.array(Image.open(sheet_path).convert("RGBA"))
+        arr = remove_background_arr(raw)
+        alpha = arr[..., 3] > 8
+        labels, ncomp = ndimage.label(alpha, structure=np.ones((3, 3)))
+
+        items = []  # (x0, y0, y1, x0, x1, mask)
+        for i in range(1, ncomp + 1):
+            mask = labels == i
+            ys, xs = np.where(mask)
+            if ys.size < 100:
+                continue
+            y0, y1, x0, x1 = ys.min(), ys.max(), xs.min(), xs.max()
+            if (y1 - y0 + 1) < SHOWCASE_MIN_ART_H:
+                continue  # caption text
+            items.append((x0, y0, y1, x0, x1, mask))
+        items.sort(key=lambda t: t[0])  # left to right
+
+        name = os.path.splitext(os.path.basename(sheet_path))[0]
+        for i, (_, y0, y1, x0, x1, mask) in enumerate(items):
+            ay0, ay1 = max(0, y0 - PAD), min(raw.shape[0], y1 + PAD + 1)
+            ax0, ax1 = max(0, x0 - PAD), min(raw.shape[1], x1 + PAD + 1)
+            sub = arr[ay0:ay1, ax0:ax1].copy()
+            sub[~mask[ay0:ay1, ax0:ax1], 3] = 0
+            _save_or_report(sub, index, f"{name}_{i}", report_only)
+            index += 1
+    return index
+
+
+def main():
+    report_only = "--report" in sys.argv
+    if not report_only:
+        os.makedirs(OUT_DIR, exist_ok=True)
+
+    index = slice_grid_sheet(report_only, 0)
+    index = slice_showcase_sheets(report_only, index)
 
     print(f"{'would write' if report_only else 'wrote'} {index} sprites -> {OUT_DIR}/{SLUG}-0..{index - 1}.png")
 
