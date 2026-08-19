@@ -25,6 +25,14 @@ import { drawPlayer } from './render/playerSprite.js';
 // paired with the anchor-height constants in world/hazards.js.
 const HAZARD_HIT_RADIUS = 34;
 
+// Restart respawns just behind wherever the bike crashed rather than all the
+// way back at the start of the run - otherwise every retry is a long,
+// already-looted trek back through pickups it already collected and
+// hazards it already knows about. Far enough back to clear whatever caused
+// the crash and get a real runway, not so far it eats the point of not
+// resetting to 0.
+const RESPAWN_BACKUP = 300;
+
 async function main() {
     const params = new URLSearchParams(location.search);
     const canvas = document.getElementById('gameCanvas');
@@ -142,7 +150,7 @@ async function main() {
             }
 
             if (input.pressed('help')) { showHelp(); input.endFrame(); return; }
-            if (input.pressed('restart')) { bike.reset(); prevFlipBonus = 0; }
+            if (input.pressed('restart')) { bike.reset(Math.max(0, bike.x - RESPAWN_BACKUP)); prevFlipBonus = 0; }
             if (input.pressed('mute')) { audio.toggleMute(); sfx.setMuted(audio.muted); }
 
             bike.update(dt, input);
