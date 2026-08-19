@@ -98,6 +98,12 @@ export const SPRITE_MANIFEST = [
     ...variantEntries('fields.wildflowerClump', 'fields', 'wildflower-clump', FIELDS_WILDFLOWER_CLUMP.length),
     ...variantEntries('fields.fencePost', 'fields', 'fence-post', FIELDS_FENCE_POST.length),
 
+    // Hazards (world/hazards.js) - single canonical image each, not a random
+    // style pool, since a hazard's silhouette is part of reading it as
+    // "jump this" at speed rather than a decorative style roll.
+    { id: 'hazard.puddle', path: `${BASE}/hazards/puddle.png` },
+    { id: 'hazard.wall', path: `${BASE}/hazards/wall.png` },
+
     ...variantEntries('sky.moon', 'sky/moon', 'moon', MOON_PHASE_FRAMES.length),
 
     ...variantEntries('sky.sun', 'sky/sun', 'sun', SUN_FRAMES.length),
@@ -111,16 +117,27 @@ export const SPRITE_MANIFEST = [
 // (clutter, center-anchored) may draw, per biome - Tree/Rock pick a random
 // entry from these pools per instance (world/scenery.js), so listing every
 // variant here is what gives each biome its visual variety.
+// dead-tree-3 (mountains/dead-tree-3.png) draws a fallen branch sprawling
+// sideways, not a standing trunk - Tree (world/scenery.js) bottom-center-
+// anchors everything in BIOME_TALL_SPRITES on the assumption there's one
+// trunk touching the ground directly below the sprite's x, which left most
+// of that variant's mass floating above the terrain with nothing under it.
+// It reads correctly through Rock's center-anchor instead (the same fix
+// woods/fallen-log already gets by living in the clutter pool, not the tall
+// one), so it moves to BIOME_CLUTTER_SPRITES.mountains below.
+const MOUNTAINS_DEAD_TREE_STANDING = MOUNTAINS_DEAD_TREE.filter((_, i) => i !== 3);
+const MOUNTAINS_DEAD_TREE_FALLEN = [MOUNTAINS_DEAD_TREE[3]];
+
 export const BIOME_TALL_SPRITES = {
     fields: [],
     woods: WOODS_PINE_TREE,
     beach: BEACH_PALM_TREE,
-    mountains: MOUNTAINS_DEAD_TREE,
+    mountains: MOUNTAINS_DEAD_TREE_STANDING,
 };
 
 export const BIOME_CLUTTER_SPRITES = {
     fields: [...FIELDS_HAY_BALE, ...FIELDS_WILDFLOWER_CLUMP, ...FIELDS_FENCE_POST],
     woods: WOODS_FALLEN_LOG,
     beach: [...BEACH_DRIFTWOOD, ...BEACH_UMBRELLA],
-    mountains: [...MOUNTAINS_BOULDER, ...MOUNTAINS_SNOW_PATCH],
+    mountains: [...MOUNTAINS_BOULDER, ...MOUNTAINS_SNOW_PATCH, ...MOUNTAINS_DEAD_TREE_FALLEN],
 };
