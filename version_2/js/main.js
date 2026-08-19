@@ -5,6 +5,7 @@ import { hashString } from './core/rng.js';
 import { Terrain, PIXELS_PER_DAY } from './world/terrain.js';
 import { Scenery } from './world/scenery.js';
 import { PickupField } from './world/pickups.js';
+import { HazardField } from './world/hazards.js';
 import { Renderer } from './render/renderer.js';
 import { Sky } from './render/sky.js';
 import { Parallax } from './render/parallax.js';
@@ -20,6 +21,10 @@ import { drawPlayer } from './render/playerSprite.js';
 // Entry point. Constructs, owns the loop, dispatches. If this file starts
 // growing game logic, that logic belongs in game/ or render/ instead.
 
+// Just over WHEEL_R (30, game/bike.js) - the main hazard-feel tuning knob,
+// paired with the anchor-height constants in world/hazards.js.
+const HAZARD_HIT_RADIUS = 34;
+
 async function main() {
     const params = new URLSearchParams(location.search);
     const canvas = document.getElementById('gameCanvas');
@@ -33,6 +38,7 @@ async function main() {
     const terrain = new Terrain(seed);
     const scenery = new Scenery(terrain, seed);
     const pickups = new PickupField(terrain, seed);
+    const hazards = new HazardField(terrain, seed);
     const portfolio = new Portfolio();
     const parallax = new Parallax();
     const input = new Input(canvas);
@@ -141,6 +147,10 @@ async function main() {
 
             bike.update(dt, input);
 
+            if (!bike.crashed && hazards.hits(bike.x, bike.y, HAZARD_HIT_RADIUS)) {
+                bike.crashOn();
+            }
+
             if (wasAirborne && !bike.airborne) {
                 justLanded = true;
                 if (bike.lastLanding === 'perfect') {
@@ -199,7 +209,7 @@ async function main() {
 
         render() {
             renderer.draw({
-                camera, sky, terrain, scenery, pickups, parallax, debug, seed,
+                camera, sky, terrain, scenery, pickups, hazards, parallax, debug, seed,
 
                 drawPlayfield(ctx, darkness) {
                     ctx.save();

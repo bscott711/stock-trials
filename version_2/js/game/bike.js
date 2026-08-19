@@ -163,6 +163,16 @@ export class Bike {
         }
     }
 
+    /** Enter the crashed state. Used by both a bad landing and a hazard hit. */
+    crashOn() {
+        if (this.crashed) return;
+        this.crashed = true;
+        this.lastLanding = 'crash';
+        this.airborne = false;
+        this.vy = 0;
+        this.angVel = 0;
+    }
+
     _land(surface) {
         this.y = surface;
         const surfaceAngle = Math.atan(this.terrain.sampleSlope(this.x));
@@ -181,15 +191,11 @@ export class Bike {
         const headClearance = this.terrain.sampleY(headX) - headY;
 
         if (headClearance <= 0) {
-            this.crashed = true;
-            this.lastLanding = 'crash';
             // Already sitting on the surface (this.y was just clamped above),
             // so it's landed, not still falling - without this the crashed-
             // coast branch in update() re-applies gravity for one extra step
             // before its own clamp catches up.
-            this.airborne = false;
-            this.vy = 0;
-            this.angVel = 0;
+            this.crashOn();
             return;
         }
 
