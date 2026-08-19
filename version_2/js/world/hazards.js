@@ -1,6 +1,6 @@
 import { mulberry32 } from '../core/rng.js';
 import { getSprite } from '../render/assets.js';
-import { BIOME_CLUTTER_SPRITES } from '../render/spriteManifest.js';
+import { BIOME_CLUTTER_SPRITES, HAZARD_WALL_SPRITES } from '../render/spriteManifest.js';
 
 // Ground-anchored obstacles that crash the bike on contact, generated lazily
 // per segment exactly like world/scenery.js's rocks/trees and
@@ -13,7 +13,12 @@ import { BIOME_CLUTTER_SPRITES } from '../render/spriteManifest.js';
 // here as an actual obstacle instead of only ever being background), and a
 // rarer, taller 'wall' that only clears near the top of a jump's arc -
 // biased into choppier terrain via terrain.localVolatility, the same
-// stretches pickups already bias elevated, higher-value pickups into. Every
+// stretches pickups already bias elevated, higher-value pickups into. Wall
+// draws from a 30-design style pool (tools/build_barricade_sprites.py,
+// HAZARD_WALL_SPRITES) rather than one fixed image, same random-per-
+// instance pattern as the log/clutter pools - variety doesn't hurt
+// readability here since every design already reads as "obstacle" on
+// sight. Every
 // segment spawns at least one, so riding without ever jumping is guaranteed
 // to end the run before long rather than being something that just happens
 // to a player eventually.
@@ -65,7 +70,8 @@ class Hazard {
         this.kind = kind;
         // Picked once so it's stable across re-entry, same per-instance-
         // random pattern as Rock/Tree's spriteId in world/scenery.js.
-        this.spriteId = kind === 'log' ? LOG_SPRITES[Math.floor(rng() * LOG_SPRITES.length)] : null;
+        const pool = kind === 'log' ? LOG_SPRITES : kind === 'wall' ? HAZARD_WALL_SPRITES : null;
+        this.spriteId = pool ? pool[Math.floor(rng() * pool.length)] : null;
     }
 
     draw(ctx) {
@@ -104,7 +110,7 @@ class Hazard {
         }
 
         if (this.kind === 'wall') {
-            const img = getSprite('hazard.wall');
+            const img = this.spriteId && getSprite(this.spriteId);
             if (img) {
                 // Bottom-anchored and scaled by HEIGHT, like Tree in
                 // world/scenery.js - a wall reads as a standing obstacle

@@ -128,14 +128,26 @@ Run: `uv run tools/build_player_rig.py <clip.mp4> version_2/assets/sprites/playe
 
 Ground obstacles from `js/world/hazards.js` that crash the bike on contact -
 unlike the biome scenery above, these aren't decorative, so silhouette
-readability at speed matters more than style variety. One canonical image
-each (no style-variant pool): a wall's danger stripes and a puddle's murky
-water need to look the same every time so a player learns the shape once and
-recognizes it instantly, the way a real game's hazard telegraphing works.
+readability at speed matters more than any one design.
+
+**Wall: done.** `assets/sprites/barricades/more_variations.png` (a 30-cell
+hand-made contact sheet mixing wood/rope, stone/wheel, and icy-mountain
+barricade designs) is sliced by `tools/build_barricade_sprites.py` into
+`hazards/wall-0.png` … `wall-29.png`, wired in as `HAZARD_WALL_SPRITES` in
+`js/render/spriteManifest.js` and picked at random per instance the same way
+Rock/Tree pick a biome clutter sprite - style variety doesn't hurt
+readability here since every design already reads as "obstacle" on sight,
+unlike a single hazard that needs one fixed, learnable silhouette. If more
+wall variety ever gets added, drop another same-style contact sheet next to
+`more_variations.png` and extend the tool rather than hand-slicing it.
+
+**Puddle: still needed**, one canonical image (no style-variant pool) - its
+murky water needs to look the same every time so a player learns the shape
+once and recognizes it instantly, the way a real game's hazard telegraphing
+works.
 
 | # | Subject + sizing | Save as |
 |---|---|---|
-| 21 | Waist-to-head-height wooden/metal barrier a rider must jump, diagonal red/yellow hazard stripes (same visual language as the game's current striped-box placeholder). Canvas 70×150px, bottom-center anchored (base at x=35,y=146). | `hazards/wall.png` |
 | 22 | Flat murky puddle, muddy blue-brown water, a lighter reflective highlight, 1-2 faint ripple rings, no hard shadow. Canvas 140×50px, bottom-anchored (waterline sits at the bottom edge, matching the ground line - not centered like the Clutter row above). | `hazards/puddle.png` |
 
 ## Sky
@@ -211,7 +223,7 @@ one generic cloud - generate each as its own sheet of style variants:
   patches)** are drawn center-anchored and scaled off their pixel *width* as
   a stand-in diameter.
 - **Hazards** split across both conventions above rather than following
-  either one exactly: `hazards/wall.png` is bottom-anchored and scaled by
+  either one exactly: `hazards/wall-N.png` is bottom-anchored and scaled by
   *height*, same as Trees; `hazards/puddle.png` is bottom-anchored (waterline
   at the canvas bottom edge, not centered) but scaled by *width*, same as
   Clutter. The fallen-log clutter sprite doubles as a third hazard skin

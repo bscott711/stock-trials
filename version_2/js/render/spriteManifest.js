@@ -57,6 +57,14 @@ const FIELDS_HAY_BALE = variantIds('fields.hayBale', 8);
 const FIELDS_WILDFLOWER_CLUMP = variantIds('fields.wildflowerClump', 6);
 const FIELDS_FENCE_POST = variantIds('fields.fencePost', 6);
 
+// tools/build_barricade_sprites.py sliced these from
+// barricades/more_variations.png's 30-cell grid (wood/rope, stone/wheel,
+// and icy-mountain barricade designs all mixed together) - a random style
+// pool like the biome clutter above, not sequential states, since every
+// cell already reads as "an obstacle blocking the path" regardless of
+// theme.
+export const HAZARD_WALL_SPRITES = variantIds('hazard.wall', 30);
+
 // The moon's 8 phase frames, extracted from one locked-off video of a full
 // lunar cycle (tools/build_moon_sprites.py) rather than drawn as separate
 // style variants - unlike the biome pools above, these are picked by
@@ -98,11 +106,12 @@ export const SPRITE_MANIFEST = [
     ...variantEntries('fields.wildflowerClump', 'fields', 'wildflower-clump', FIELDS_WILDFLOWER_CLUMP.length),
     ...variantEntries('fields.fencePost', 'fields', 'fence-post', FIELDS_FENCE_POST.length),
 
-    // Hazards (world/hazards.js) - single canonical image each, not a random
-    // style pool, since a hazard's silhouette is part of reading it as
-    // "jump this" at speed rather than a decorative style roll.
+    // Hazards (world/hazards.js). Puddle stays a single canonical image
+    // (no art yet) since a hazard's silhouette is part of reading it as
+    // "jump this" at speed; wall gets a full style pool instead now that
+    // real art exists for it - see HAZARD_WALL_SPRITES above.
     { id: 'hazard.puddle', path: `${BASE}/hazards/puddle.png` },
-    { id: 'hazard.wall', path: `${BASE}/hazards/wall.png` },
+    ...variantEntries('hazard.wall', 'hazards', 'wall', HAZARD_WALL_SPRITES.length),
 
     ...variantEntries('sky.moon', 'sky/moon', 'moon', MOON_PHASE_FRAMES.length),
 
