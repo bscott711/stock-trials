@@ -54,6 +54,9 @@ export class Terrain {
             amp: d.amplitude,
             phase: phaseRng() * Math.PI * 2,
         }));
+        // Roughness if every octave's cosine peaked at once - the normalizer
+        // for localVolatility() below.
+        this._maxDetailRoughness = this.detail.reduce((s, d) => s + d.amp * d.k, 0);
 
         this.ensureGenerated(PIXELS_PER_DAY * 4);
     }
@@ -91,6 +94,15 @@ export class Terrain {
         return m;
     }
 
+    // Sum of |octave slope| rather than a signed sum, so out-of-phase octaves
+    // don't cancel each other out the way they can in _detailSlope - this is
+    // meant to read as "how choppy is it here", not "which way is it leaning".
+    _detailRoughness(worldX) {
+        let m = 0;
+        for (const d of this.detail) m += Math.abs(d.amp * d.k * Math.cos(worldX * d.k + d.phase));
+        return m;
+    }
+
     sampleY(worldX) {
         if (worldX < 0) return this.ys[0] + this._detailY(0);
         this.ensureGenerated(worldX);
@@ -104,6 +116,14 @@ export class Terrain {
         this.ensureGenerated(worldX);
         const i = Math.floor(worldX / PIXELS_PER_DAY);
         return (this.ys[i + 1] - this.ys[i]) / PIXELS_PER_DAY + this._detailSlope(worldX);
+    }
+
+    /** 0..1 how choppy the intraday detail curve is here. Drives pickup
+     * placement/value - riding fast through volatile terrain is the whole
+     * "risk/reward" premise, so this is the one number that stands in for it. */
+    localVolatility(worldX) {
+        if (worldX < 0) return 0;
+        return clamp(this._detailRoughness(worldX) / this._maxDetailRoughness, 0, 1);
     }
 
     /** Unit normal pointing up out of the surface. */

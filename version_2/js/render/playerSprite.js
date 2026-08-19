@@ -24,7 +24,7 @@ const RIG_ANCHOR_Y = 122.26;
 
 const dustEmitter = new DustEmitter();
 
-/** state = { distance, darkness, airborne, justLanded } */
+/** state = { distance, darkness, airborne, justLanded, justCrashed, justCollected } */
 export function drawPlayer(ctx, state) {
     const rig = computeRig(state.distance);
 

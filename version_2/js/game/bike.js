@@ -12,7 +12,7 @@ export const WHEEL_R = 30;
 
 const DRIVE = 190;
 const BRAKE = 320;
-const MAX_SPEED = 620;
+export const MAX_SPEED = 620;
 const MIN_SPEED = 60;
 const GRAVITY = 1600;
 const JUMP_IMPULSE = 520;
