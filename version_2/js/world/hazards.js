@@ -8,13 +8,13 @@ import { getSprite } from '../render/assets.js';
 // these yet, so they always fall back to the procedural draw below - same
 // "sprite optional" contract as Pickup.
 //
-// Placement mirrors pickups' low/elevated split but inverted toward risk:
-// most hazards are low 'rock' obstacles a normal jump clears easily; a
-// minority are taller 'barrier' obstacles that only clear near the top of a
-// jump's arc, biased into choppier terrain via terrain.localVolatility - the
-// same stretches pickups already bias elevated, higher-value pickups into.
-// Choppy chart segments end up simultaneously higher-risk and
-// higher-reward, instead of hazards being an unrelated bolt-on mechanic.
+// Two kinds, both requiring a real reaction, not a rare surprise: a common,
+// low 'puddle' any real hop clears, and a rarer, taller 'wall' that only
+// clears near the top of a jump's arc - biased into choppier terrain via
+// terrain.localVolatility, the same stretches pickups already bias
+// elevated, higher-value pickups into. Every segment spawns at least one, so
+// riding without ever jumping is guaranteed to end the run before long
+// rather than being something that just happens to a player eventually.
 //
 // Like Pickup, `y` is the single anchor used for BOTH drawing and hit
 // testing (main.js's hazards.hits() call), not the ground contact point -
@@ -22,51 +22,42 @@ import { getSprite } from '../render/assets.js';
 // the silhouette at the terrain surface.
 
 const SEGMENT = 3000;
-const SAFE_START_X = 1600; // no hazard before this - the player needs a runway
-const BARRIER_CHANCE = 0.3;
+const SAFE_START_X = 1000; // no hazard before this - the player needs a runway
+const WALL_CHANCE = 0.3;
 
 // A grounded bike's axle sits at groundY - WHEEL_R (30, game/bike.js), and
 // main.js tests hits with a ~34 radius (HAZARD_HIT_RADIUS), so clearing a
 // hazard needs the bike's elevation above ground to exceed anchorHeight +
 // HAZARD_HIT_RADIUS. A plain jump (JUMP_IMPULSE=520, GRAVITY=1600 in
 // bike.js) peaks ~84.5 above its own launch point (same math pickups.js
-// uses for ELEVATED_HEIGHT_MIN) - that ceiling is why BARRIER_ANCHOR's max
+// uses for ELEVATED_HEIGHT_MIN) - that ceiling is why WALL_ANCHOR's max
 // (41 + 34 = 75) sits well under it rather than near the pickup-style 55-90
 // band: anything past ~50 would need more lift than a jump can ever produce,
 // making some rolls literally uncrossable instead of just hard to time.
-// Rock anchors sit low enough that any real hop clears them with room to
-// spare; barrier anchors sit high enough that only a jump timed close to its
-// own apex when crossing the barrier's x clears it.
-const ROCK_ANCHOR_MIN = 10;
-const ROCK_ANCHOR_RANGE = 15;
-const BARRIER_ANCHOR_MIN = 30;
-const BARRIER_ANCHOR_RANGE = 11;
+// Puddle anchors sit low enough that any real hop clears them with room to
+// spare; wall anchors sit high enough that only a jump timed close to its
+// own apex when crossing the wall's x clears it.
+const PUDDLE_ANCHOR_MIN = 10;
+const PUDDLE_ANCHOR_RANGE = 15;
+const WALL_ANCHOR_MIN = 30;
+const WALL_ANCHOR_RANGE = 11;
 
-const ROCK_VISUAL_RADIUS = 22;
-const BARRIER_VISUAL_WIDTH = 30;
-const BARRIER_VISUAL_HEIGHT = 64;
+const PUDDLE_VISUAL_WIDTH = 64;
+const PUDDLE_VISUAL_HEIGHT = 22;
+const WALL_VISUAL_WIDTH = 30;
+const WALL_VISUAL_HEIGHT = 64;
 const SPRITE_TARGET_SIZE = 56;
 
 class Hazard {
-    constructor(x, groundY, anchorHeight, kind, rng) {
+    constructor(x, groundY, anchorHeight, kind) {
         this.x = x;
         this.groundY = groundY;
         this.y = groundY - anchorHeight;
         this.kind = kind;
-
-        if (kind === 'rock') {
-            const n = Math.floor(rng() * 3) + 6;
-            this.points = [];
-            for (let i = 0; i < n; i++) {
-                const a = (Math.PI * 2 / n) * i;
-                const r = ROCK_VISUAL_RADIUS * (rng() * 0.3 + 0.85);
-                this.points.push({ x: Math.cos(a) * r, y: Math.sin(a) * r * 0.8 });
-            }
-        }
     }
 
     draw(ctx) {
-        const img = getSprite(this.kind === 'barrier' ? 'hazard.barrier' : 'hazard.rock');
+        const img = getSprite(this.kind === 'wall' ? 'hazard.wall' : 'hazard.puddle');
         if (img) {
             const s = SPRITE_TARGET_SIZE / img.width;
             const w = img.width * s, h = img.height * s;
@@ -74,8 +65,8 @@ class Hazard {
             return;
         }
 
-        if (this.kind === 'barrier') {
-            const w = BARRIER_VISUAL_WIDTH, h = BARRIER_VISUAL_HEIGHT;
+        if (this.kind === 'wall') {
+            const w = WALL_VISUAL_WIDTH, h = WALL_VISUAL_HEIGHT;
             ctx.fillStyle = '#b5342c';
             ctx.strokeStyle = '#4a1310';
             ctx.lineWidth = 3;
@@ -86,15 +77,22 @@ class Hazard {
             ctx.fillRect(this.x - w / 2, this.groundY - h, w, stripeH);
             ctx.fillRect(this.x - w / 2, this.groundY - h + stripeH * 2, w, stripeH);
         } else {
+            // Flush with the ground and unmissably blue, rather than
+            // something that could be mistaken for scenery.js's earth-toned
+            // decorative rocks.
+            const rx = PUDDLE_VISUAL_WIDTH / 2, ry = PUDDLE_VISUAL_HEIGHT / 2;
+            const cy = this.groundY - ry;
             ctx.beginPath();
-            ctx.moveTo(this.x + this.points[0].x, this.groundY + this.points[0].y);
-            for (const p of this.points) ctx.lineTo(this.x + p.x, this.groundY + p.y);
-            ctx.closePath();
-            ctx.fillStyle = '#7a2f28';
-            ctx.strokeStyle = '#3a1512';
-            ctx.lineWidth = 2;
+            ctx.ellipse(this.x, cy, rx, ry, 0, 0, Math.PI * 2);
+            ctx.fillStyle = '#2f6f8f';
             ctx.fill();
+            ctx.strokeStyle = '#16394a';
+            ctx.lineWidth = 2;
             ctx.stroke();
+            ctx.beginPath();
+            ctx.ellipse(this.x - rx * 0.2, cy - ry * 0.3, rx * 0.35, ry * 0.3, 0, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+            ctx.fill();
         }
     }
 }
@@ -112,7 +110,7 @@ export class HazardField {
 
         const rng = mulberry32((this.seed ^ Math.imul(start | 0, 0xC2B2AE35)) >>> 0);
         const hazards = [];
-        const count = Math.floor(rng() * 3); // 0-2 per segment
+        const count = Math.floor(rng() * 3) + 1; // 1-3 per segment - never zero
 
         for (let i = 0; i < count; i++) {
             const x = start + rng() * SEGMENT;
@@ -121,12 +119,12 @@ export class HazardField {
             const groundY = this.terrain.sampleY(x);
             const volatility = this.terrain.localVolatility(x);
 
-            const kind = rng() < BARRIER_CHANCE ? 'barrier' : 'rock';
-            const anchorHeight = kind === 'barrier'
-                ? BARRIER_ANCHOR_MIN + volatility * BARRIER_ANCHOR_RANGE * rng()
-                : ROCK_ANCHOR_MIN + rng() * ROCK_ANCHOR_RANGE;
+            const kind = rng() < WALL_CHANCE ? 'wall' : 'puddle';
+            const anchorHeight = kind === 'wall'
+                ? WALL_ANCHOR_MIN + volatility * WALL_ANCHOR_RANGE * rng()
+                : PUDDLE_ANCHOR_MIN + rng() * PUDDLE_ANCHOR_RANGE;
 
-            hazards.push(new Hazard(x, groundY, anchorHeight, kind, rng));
+            hazards.push(new Hazard(x, groundY, anchorHeight, kind));
         }
 
         seg = hazards;
