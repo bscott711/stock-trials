@@ -124,6 +124,20 @@ Run: `uv run tools/build_player_rig.py <clip.mp4> version_2/assets/sprites/playe
 | 14 | Small wildflower clump, a few green stems, 4-5 simple colorful flower dots. Canvas 70×70px, bottom-weighted (base near x=35,y=60). | `fields/wildflower-clump.png` |
 | 15 | Weathered wooden fence post, 1-2 short horizontal rail stubs. Canvas 40×100px, bottom-center anchored. | `fields/fence-post.png` |
 
+## Hazards
+
+Ground obstacles from `js/world/hazards.js` that crash the bike on contact -
+unlike the biome scenery above, these aren't decorative, so silhouette
+readability at speed matters more than style variety. One canonical image
+each (no style-variant pool): a wall's danger stripes and a puddle's murky
+water need to look the same every time so a player learns the shape once and
+recognizes it instantly, the way a real game's hazard telegraphing works.
+
+| # | Subject + sizing | Save as |
+|---|---|---|
+| 21 | Waist-to-head-height wooden/metal barrier a rider must jump, diagonal red/yellow hazard stripes (same visual language as the game's current striped-box placeholder). Canvas 70×150px, bottom-center anchored (base at x=35,y=146). | `hazards/wall.png` |
+| 22 | Flat murky puddle, muddy blue-brown water, a lighter reflective highlight, 1-2 faint ripple rings, no hard shadow. Canvas 140×50px, bottom-anchored (waterline sits at the bottom edge, matching the ground line - not centered like the Clutter row above). | `hazards/puddle.png` |
+
 ## Sky
 
 The sun, moon, and clouds are drawn procedurally in `js/render/sky.js` -
@@ -196,6 +210,12 @@ one generic cloud - generate each as its own sheet of style variants:
 - **Clutter (logs, driftwood, boulders, hay bales, flowers, posts, snow
   patches)** are drawn center-anchored and scaled off their pixel *width* as
   a stand-in diameter.
+- **Hazards** split across both conventions above rather than following
+  either one exactly: `hazards/wall.png` is bottom-anchored and scaled by
+  *height*, same as Trees; `hazards/puddle.png` is bottom-anchored (waterline
+  at the canvas bottom edge, not centered) but scaled by *width*, same as
+  Clutter. The fallen-log clutter sprite doubles as a third hazard skin
+  as-is (`js/world/hazards.js`), no separate hazard-specific log art needed.
 - **Sky objects (sun, moon, clouds)** are also center-anchored and scaled
   off pixel width like clutter, but against a fixed on-screen target size
   instead of a world-unit one, since they don't move with the camera - see
@@ -207,8 +227,8 @@ one generic cloud - generate each as its own sheet of style variants:
   critical, but keeping the hip at roughly the same relative spot across
   every pose in a row is what keeps the pedaling/sway from visibly jumping
   frame to frame.
-- Counting every category above (biome scenery, sky, and the player rig) is
-  16 world groups + the player rig, all optional in the sense that each
+- Counting every category above (biome scenery, hazards, sky, and the player
+  rig) is 18 world groups + the player rig, all optional in the sense that each
   degrades independently back to its procedural look when missing - none
   are required just to get the game running, only to get sprite art
   instead of shapes for that particular piece.
