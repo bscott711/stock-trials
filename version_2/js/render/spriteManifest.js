@@ -66,6 +66,11 @@ const FIELDS_FENCE_POST = variantIds('fields.fencePost', 6);
 // regardless of theme.
 export const HAZARD_WALL_SPRITES = variantIds('hazard.wall', 36);
 
+// tools/build_puddle_sprites.py sliced these from hazards/puddles.png's
+// clean 3x4 grid - same random style pool treatment as wall above, now
+// that real art exists for puddle too.
+export const HAZARD_PUDDLE_SPRITES = variantIds('hazard.puddle', 12);
+
 // The moon's 8 phase frames, extracted from one locked-off video of a full
 // lunar cycle (tools/build_moon_sprites.py) rather than drawn as separate
 // style variants - unlike the biome pools above, these are picked by
@@ -107,11 +112,10 @@ export const SPRITE_MANIFEST = [
     ...variantEntries('fields.wildflowerClump', 'fields', 'wildflower-clump', FIELDS_WILDFLOWER_CLUMP.length),
     ...variantEntries('fields.fencePost', 'fields', 'fence-post', FIELDS_FENCE_POST.length),
 
-    // Hazards (world/hazards.js). Puddle stays a single canonical image
-    // (no art yet) since a hazard's silhouette is part of reading it as
-    // "jump this" at speed; wall gets a full style pool instead now that
-    // real art exists for it - see HAZARD_WALL_SPRITES above.
-    { id: 'hazard.puddle', path: `${BASE}/hazards/puddle.png` },
+    // Hazards (world/hazards.js) - both draw from a random style pool now,
+    // same as the biome clutter above (see HAZARD_WALL_SPRITES/
+    // HAZARD_PUDDLE_SPRITES).
+    ...variantEntries('hazard.puddle', 'hazards', 'puddle', HAZARD_PUDDLE_SPRITES.length),
     ...variantEntries('hazard.wall', 'hazards', 'wall', HAZARD_WALL_SPRITES.length),
 
     ...variantEntries('sky.moon', 'sky/moon', 'moon', MOON_PHASE_FRAMES.length),

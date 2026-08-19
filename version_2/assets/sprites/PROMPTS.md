@@ -146,14 +146,15 @@ needs one fixed, learnable silhouette. If more wall variety ever gets
 added, drop another same-shape sheet next to its siblings in `barricades/`
 and extend the tool rather than hand-slicing it.
 
-**Puddle: still needed**, one canonical image (no style-variant pool) - its
-murky water needs to look the same every time so a player learns the shape
-once and recognizes it instantly, the way a real game's hazard telegraphing
-works.
-
-| # | Subject + sizing | Save as |
-|---|---|---|
-| 22 | Flat murky puddle, muddy blue-brown water, a lighter reflective highlight, 1-2 faint ripple rings, no hard shadow. Canvas 140×50px, bottom-anchored (waterline sits at the bottom edge, matching the ground line - not centered like the Clutter row above). | `hazards/puddle.png` |
+**Puddle: done.** `tools/build_puddle_sprites.py` slices
+`hazards/puddles.png` (a clean 3x4 grid, no captions, one puddle style per
+cell) into `hazards/puddle-0.png` … `puddle-11.png`, wired in as
+`HAZARD_PUDDLE_SPRITES` and picked at random per instance, same treatment
+as wall above - a dozen water/mud/tar colorways all still read as "puddle"
+on sight, so style variety doesn't cost readability here either. Placement
+is also restricted to spots the terrain shape says water would actually
+collect (`isPoolingSpot()` in `js/world/hazards.js` - flat ground that
+isn't a hilltop crest), not just anywhere flat.
 
 ## Sky
 
@@ -229,7 +230,7 @@ one generic cloud - generate each as its own sheet of style variants:
   a stand-in diameter.
 - **Hazards** split across both conventions above rather than following
   either one exactly: `hazards/wall-N.png` is bottom-anchored and scaled by
-  *height*, same as Trees; `hazards/puddle.png` is bottom-anchored (waterline
+  *height*, same as Trees; `hazards/puddle-N.png` is bottom-anchored (waterline
   at the canvas bottom edge, not centered) but scaled by *width*, same as
   Clutter. The fallen-log clutter sprite doubles as a third hazard skin
   as-is (`js/world/hazards.js`), no separate hazard-specific log art needed.

@@ -1,6 +1,6 @@
 import { mulberry32 } from '../core/rng.js';
 import { getSprite } from '../render/assets.js';
-import { BIOME_CLUTTER_SPRITES, HAZARD_WALL_SPRITES } from '../render/spriteManifest.js';
+import { BIOME_CLUTTER_SPRITES, HAZARD_WALL_SPRITES, HAZARD_PUDDLE_SPRITES } from '../render/spriteManifest.js';
 
 // Ground-anchored obstacles that crash the bike on contact, generated lazily
 // per segment exactly like world/scenery.js's rocks/trees and
@@ -8,20 +8,20 @@ import { BIOME_CLUTTER_SPRITES, HAZARD_WALL_SPRITES } from '../render/spriteMani
 // rebuilds identically, cull-and-evict draw()).
 //
 // Three kinds, all requiring a real reaction, not a rare surprise: two
-// common, low kinds any real hop clears ('puddle', procedural, and 'log',
-// the same fallen-log art scenery.js already draws as decoration - reused
-// here as an actual obstacle instead of only ever being background), and a
-// rarer, taller 'wall' that only clears near the top of a jump's arc -
-// biased into choppier terrain via terrain.localVolatility, the same
-// stretches pickups already bias elevated, higher-value pickups into. Wall
-// draws from a 30-design style pool (tools/build_barricade_sprites.py,
-// HAZARD_WALL_SPRITES) rather than one fixed image, same random-per-
-// instance pattern as the log/clutter pools - variety doesn't hurt
-// readability here since every design already reads as "obstacle" on
-// sight. Every
-// segment spawns at least one, so riding without ever jumping is guaranteed
-// to end the run before long rather than being something that just happens
-// to a player eventually.
+// common, low kinds any real hop clears ('puddle', restricted to spots
+// water would actually collect - see isPoolingSpot - and 'log', the same
+// fallen-log art scenery.js already draws as decoration, reused here as an
+// actual obstacle instead of only ever being background), and a rarer,
+// taller 'wall' that only clears near the top of a jump's arc - biased
+// into choppier terrain via terrain.localVolatility, the same stretches
+// pickups already bias elevated, higher-value pickups into. Wall and
+// puddle each draw from their own style pool (tools/build_barricade_sprites.py
+// / tools/build_puddle_sprites.py - HAZARD_WALL_SPRITES/HAZARD_PUDDLE_SPRITES)
+// rather than one fixed image, same random-per-instance pattern as the log/
+// clutter pools - variety doesn't hurt readability here since every design
+// already reads as "obstacle" on sight. Every segment spawns at least one,
+// so riding without ever jumping is guaranteed to end the run before long
+// rather than being something that just happens to a player eventually.
 //
 // Like Pickup, `y` is the single anchor used for BOTH drawing and hit
 // testing (main.js's hazards.hits() call), not the ground contact point -
@@ -97,6 +97,29 @@ function approachClimb(terrain, x) {
     return highestPointBehind - hazardGroundY; // positive = net uphill into x
 }
 
+// Water pools at the bottom of a dip, not partway up a slope. Local slope
+// alone can't tell those apart - a hilltop crest is just as flat as a
+// valley floor - so this also checks that the ground doesn't get any
+// LOWER-ALTITUDE-i.e.-larger-y (in this y-down world, "pools downhill of
+// here" reads as smaller y) looking a good distance either way: a crest has
+// both shoulders below it (smaller y each side), a true valley floor has
+// both shoulders above it (larger y each side). POOL_CHECK_DISTANCE is
+// wide enough to look past the terrain's own finest noise octave
+// (wavelength 170, game/terrain.js's DETAIL) so a small ripple's incidental
+// flat point on the side of a real hill doesn't get mistaken for the
+// hill's actual bottom.
+const POOL_SLOPE_MAX = 0.06;
+const POOL_CHECK_DISTANCE = 500;
+const POOL_SHOULDER_TOLERANCE = 15;
+
+function isPoolingSpot(terrain, x) {
+    if (Math.abs(terrain.sampleSlope(x)) > POOL_SLOPE_MAX) return false;
+    const yHere = terrain.sampleY(x);
+    const yBefore = terrain.sampleY(x - POOL_CHECK_DISTANCE);
+    const yAfter = terrain.sampleY(x + POOL_CHECK_DISTANCE);
+    return yHere >= yBefore - POOL_SHOULDER_TOLERANCE && yHere >= yAfter - POOL_SHOULDER_TOLERANCE;
+}
+
 const PUDDLE_VISUAL_WIDTH = 64;
 const PUDDLE_VISUAL_HEIGHT = 22;
 const WALL_VISUAL_WIDTH = 30;
@@ -112,8 +135,10 @@ class Hazard {
         this.kind = kind;
         // Picked once so it's stable across re-entry, same per-instance-
         // random pattern as Rock/Tree's spriteId in world/scenery.js.
-        const pool = kind === 'log' ? LOG_SPRITES : kind === 'wall' ? HAZARD_WALL_SPRITES : null;
-        this.spriteId = pool ? pool[Math.floor(rng() * pool.length)] : null;
+        const pool = kind === 'log' ? LOG_SPRITES
+            : kind === 'wall' ? HAZARD_WALL_SPRITES
+                : HAZARD_PUDDLE_SPRITES;
+        this.spriteId = pool[Math.floor(rng() * pool.length)];
     }
 
     draw(ctx) {
@@ -174,7 +199,7 @@ class Hazard {
             ctx.fillRect(this.x - w / 2, this.groundY - h, w, stripeH);
             ctx.fillRect(this.x - w / 2, this.groundY - h + stripeH * 2, w, stripeH);
         } else {
-            const img = getSprite('hazard.puddle');
+            const img = getSprite(this.spriteId);
             if (img) {
                 // Bottom-anchored and scaled by WIDTH, like Rock/clutter in
                 // world/scenery.js - a puddle is flat ground cover, not a
@@ -218,7 +243,7 @@ export class HazardField {
 
         const rng = mulberry32((this.seed ^ Math.imul(start | 0, 0xC2B2AE35)) >>> 0);
         const hazards = [];
-        const count = Math.floor(rng() * 3) + 1; // 1-3 per segment - never zero
+        const count = Math.floor(rng() * 2) + 1; // 1-2 per segment - never zero
 
         // Tail of the previous segment, if it's already been generated -
         // stops a hazard from spawning right across a segment boundary from
@@ -251,6 +276,7 @@ export class HazardField {
 
                 let kind = rng() < WALL_CHANCE ? 'wall' : (rng() < LOG_CHANCE ? 'log' : 'puddle');
                 if (kind === 'wall' && climb > MAX_CLIMB_FOR_WALL) kind = rng() < LOG_CHANCE ? 'log' : 'puddle';
+                if (kind === 'puddle' && !isPoolingSpot(this.terrain, x)) continue; // water doesn't sit on a hillside
                 const anchorHeight = kind === 'wall'
                     ? WALL_ANCHOR_MIN + volatility * WALL_ANCHOR_RANGE * rng()
                     : PUDDLE_ANCHOR_MIN + rng() * PUDDLE_ANCHOR_RANGE;
