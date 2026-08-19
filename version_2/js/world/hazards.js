@@ -38,6 +38,19 @@ const SAFE_START_X = 1000; // no hazard before this - the player needs a runway
 const WALL_CHANCE = 0.3;
 const LOG_CHANCE = 0.5; // of the non-wall rolls, how many skin as a log vs a puddle
 
+// Nothing stopped two hazards from landing right next to each other - x is
+// just an independent roll per candidate. Clearing one only to land on top
+// of a second one 10-20 units later is uncrossable the same way a hazard on
+// a steep uphill grade is (see approachClimb below): no jump timing fixes
+// it, because there was never enough room between them for any arc to clear
+// the first and still be re-grounded, reacting, and airborne again in time
+// for the second. Measured against the same ballistic simulation used to
+// validate approachClimb's thresholds: same-segment hazard pairs closer
+// than this were the single largest source of guaranteed-uncrossable cases,
+// well ahead of slope.
+const MIN_HAZARD_SPACING = 200;
+const PLACEMENT_ATTEMPTS = 8;
+
 // A grounded bike's axle sits at groundY - WHEEL_R (30, game/bike.js), and
 // main.js tests hits with a ~34 radius (HAZARD_HIT_RADIUS), so clearing a
 // hazard needs the bike's elevation above ground to exceed anchorHeight +
@@ -54,6 +67,35 @@ const PUDDLE_ANCHOR_MIN = 10;
 const PUDDLE_ANCHOR_RANGE = 15;
 const WALL_ANCHOR_MIN = 30;
 const WALL_ANCHOR_RANGE = 11;
+
+// The anchor-height math above only budgets clearance against FLAT ground
+// around the hazard - it says nothing about the ground climbing beneath the
+// bike on the way there. A jump's apex is a fixed ~84.5 above wherever it
+// launched from, so a hazard sitting atop a real uphill grade eats into
+// that same fixed budget before the hazard's own anchor+radius ever get a
+// turn - past a certain climb it's not hard to time, it's arithmetically
+// impossible regardless of when the jump is thrown. approachClimb() samples
+// the steepest net rise into `x` from anywhere within CLIMB_CHECK_DISTANCE
+// (a rough stand-in for "how far back the player could plausibly have
+// launched from and still be airborne here"), and _segment() below uses it
+// to demote or drop a hazard rather than ever place one the terrain itself
+// has already made uncrossable. Limits are the worst-case per-kind
+// clearance (75 for wall, 59 for puddle/log) subtracted from the 84.5 apex,
+// each with a few units shaved off for safety since the climb sampling
+// itself is only an approximation, not an exact integral under the jump arc.
+const CLIMB_CHECK_DISTANCE = 400;
+const CLIMB_CHECK_STEP = 50;
+const MAX_CLIMB_FOR_WALL = 6;
+const MAX_CLIMB_FOR_ANY = 20;
+
+function approachClimb(terrain, x) {
+    const hazardGroundY = terrain.sampleY(x);
+    let highestPointBehind = hazardGroundY; // largest y seen = lowest altitude
+    for (let d = CLIMB_CHECK_STEP; d <= CLIMB_CHECK_DISTANCE; d += CLIMB_CHECK_STEP) {
+        highestPointBehind = Math.max(highestPointBehind, terrain.sampleY(x - d));
+    }
+    return highestPointBehind - hazardGroundY; // positive = net uphill into x
+}
 
 const PUDDLE_VISUAL_WIDTH = 64;
 const PUDDLE_VISUAL_HEIGHT = 22;
@@ -178,19 +220,44 @@ export class HazardField {
         const hazards = [];
         const count = Math.floor(rng() * 3) + 1; // 1-3 per segment - never zero
 
+        // Tail of the previous segment, if it's already been generated -
+        // stops a hazard from spawning right across a segment boundary from
+        // one that's already there. Segments are almost always generated in
+        // increasing x order (the camera only ever scrolls forward), so
+        // this catches the common case; if the previous segment hasn't been
+        // generated yet there's nothing to check against, same as how nothing
+        // here accounts for the NEXT segment's hazards not existing yet either.
+        const prevSeg = this.segments.get(start - SEGMENT) || [];
+        const nearbyPrior = prevSeg.filter(h => h.x > start - MIN_HAZARD_SPACING);
+
         for (let i = 0; i < count; i++) {
-            const x = start + rng() * SEGMENT;
-            if (x < SAFE_START_X) continue;
+            // Reject-and-retry rather than reject-and-skip: a single bad
+            // roll (too steep, too close to a neighbor) used to just drop
+            // that slot, which quietly ate the "every segment spawns at
+            // least one" guarantee - about a third of segments came out
+            // empty once the climb/spacing checks below were added. A few
+            // fresh rolls almost always finds a spot that clears both.
+            for (let attempt = 0; attempt < PLACEMENT_ATTEMPTS; attempt++) {
+                const x = start + rng() * SEGMENT;
+                if (x < SAFE_START_X) continue;
+                if (hazards.some(h => Math.abs(h.x - x) < MIN_HAZARD_SPACING)) continue;
+                if (nearbyPrior.some(h => Math.abs(h.x - x) < MIN_HAZARD_SPACING)) continue;
 
-            const groundY = this.terrain.sampleY(x);
-            const volatility = this.terrain.localVolatility(x);
+                const climb = approachClimb(this.terrain, x);
+                if (climb > MAX_CLIMB_FOR_ANY) continue; // uphill enough that no kind would be fair here
 
-            const kind = rng() < WALL_CHANCE ? 'wall' : (rng() < LOG_CHANCE ? 'log' : 'puddle');
-            const anchorHeight = kind === 'wall'
-                ? WALL_ANCHOR_MIN + volatility * WALL_ANCHOR_RANGE * rng()
-                : PUDDLE_ANCHOR_MIN + rng() * PUDDLE_ANCHOR_RANGE;
+                const groundY = this.terrain.sampleY(x);
+                const volatility = this.terrain.localVolatility(x);
 
-            hazards.push(new Hazard(x, groundY, anchorHeight, kind, rng));
+                let kind = rng() < WALL_CHANCE ? 'wall' : (rng() < LOG_CHANCE ? 'log' : 'puddle');
+                if (kind === 'wall' && climb > MAX_CLIMB_FOR_WALL) kind = rng() < LOG_CHANCE ? 'log' : 'puddle';
+                const anchorHeight = kind === 'wall'
+                    ? WALL_ANCHOR_MIN + volatility * WALL_ANCHOR_RANGE * rng()
+                    : PUDDLE_ANCHOR_MIN + rng() * PUDDLE_ANCHOR_RANGE;
+
+                hazards.push(new Hazard(x, groundY, anchorHeight, kind, rng));
+                break;
+            }
         }
 
         seg = hazards;
