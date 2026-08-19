@@ -7,15 +7,35 @@ import { getSprite } from '../render/assets.js';
 // exists for these yet, so they always fall back to the procedural draw below
 // - same "sprite optional" contract as Rock/Tree in scenery.js.
 //
-// Placement is theme-driven: most pickups sit low enough to collect just by
-// riding through, but a chunk sit elevated over choppy terrain (scaled by
-// terrain.localVolatility), so reaching them takes a real jump - routing over
-// the terrain's own intraday noise instead of around it.
+// Placement is theme-driven: a minority of pickups sit low enough to collect
+// just by riding through, but most sit elevated over choppy terrain (scaled
+// by terrain.localVolatility), so reaching them takes a real jump - routing
+// over the terrain's own intraday noise instead of around it. Elevation and
+// kind (cash vs. the rarer, higher-value dividend) are rolled independently,
+// so jump-gating applies to both, not just the high-value one.
 
 const SEGMENT = 2500;
 const CASH_VALUE = 10;
 const DIVIDEND_VALUE = 50;
-const ELEVATED_CHANCE = 0.4;
+const DIVIDEND_CHANCE = 0.35;
+const ELEVATED_CHANCE = 0.65;
+
+// A grounded bike sits at groundY - WHEEL_R (30) and main.js collects within
+// a 60px radius, so anything up to ~90 above ground is grabbable without
+// ever leaving the ground. ELEVATED_HEIGHT_MIN clears that with margin - a
+// plain jump (JUMP_IMPULSE=520, GRAVITY=1600 in game/bike.js) peaks ~84.5
+// above its own launch point, so this band is reachable with real timing,
+// not free.
+const LOW_HEIGHT_MIN = 20;
+const LOW_HEIGHT_RANGE = 30;
+const ELEVATED_HEIGHT_MIN = 100;
+const ELEVATED_HEIGHT_RANGE = 95;
+
+// Procedural draw sizes (no sprite art exists for these yet).
+const COIN_RADIUS = 20;
+const DIVIDEND_W = 52;
+const DIVIDEND_H = 34;
+const SPRITE_TARGET_SIZE = 48;
 
 class Pickup {
     constructor(x, y, value, kind) {
@@ -31,36 +51,38 @@ class Pickup {
 
         const img = getSprite(this.kind === 'dividend' ? 'pickup.dividend' : 'pickup.cash');
         if (img) {
-            const s = 28 / img.width;
+            const s = SPRITE_TARGET_SIZE / img.width;
             const w = img.width * s, h = img.height * s;
             ctx.drawImage(img, this.x - w / 2, this.y - h, w, h);
             return;
         }
 
         if (this.kind === 'dividend') {
+            const w = DIVIDEND_W, h = DIVIDEND_H;
             ctx.fillStyle = '#2e8b46';
             ctx.strokeStyle = '#1c5c2c';
-            ctx.lineWidth = 2;
-            ctx.fillRect(this.x - 16, this.y - 34, 32, 20);
-            ctx.strokeRect(this.x - 16, this.y - 34, 32, 20);
+            ctx.lineWidth = 3;
+            ctx.fillRect(this.x - w / 2, this.y - h, w, h);
+            ctx.strokeRect(this.x - w / 2, this.y - h, w, h);
             ctx.fillStyle = '#eafff0';
-            ctx.font = 'bold 14px Arial';
+            ctx.font = 'bold 22px Arial';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText('$', this.x, this.y - 24);
+            ctx.fillText('$', this.x, this.y - h / 2);
         } else {
+            const r = COIN_RADIUS;
             ctx.fillStyle = '#f4c542';
             ctx.strokeStyle = '#a8791a';
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 3;
             ctx.beginPath();
-            ctx.arc(this.x, this.y - 22, 12, 0, Math.PI * 2);
+            ctx.arc(this.x, this.y - r, r, 0, Math.PI * 2);
             ctx.fill();
             ctx.stroke();
             ctx.fillStyle = '#7a5410';
-            ctx.font = 'bold 14px Arial';
+            ctx.font = 'bold 22px Arial';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText('$', this.x, this.y - 22);
+            ctx.fillText('$', this.x, this.y - r);
         }
     }
 }
@@ -85,12 +107,14 @@ export class PickupField {
             const groundY = this.terrain.sampleY(x);
             const volatility = this.terrain.localVolatility(x);
 
-            if (rng() < ELEVATED_CHANCE) {
-                const height = 30 + volatility * 130 * rng();
-                pickups.push(new Pickup(x, groundY - height, DIVIDEND_VALUE, 'dividend'));
-            } else {
-                pickups.push(new Pickup(x, groundY - rng() * 30, CASH_VALUE, 'cash'));
-            }
+            const kind = rng() < DIVIDEND_CHANCE ? 'dividend' : 'cash';
+            const value = kind === 'dividend' ? DIVIDEND_VALUE : CASH_VALUE;
+
+            const height = rng() < ELEVATED_CHANCE
+                ? ELEVATED_HEIGHT_MIN + volatility * ELEVATED_HEIGHT_RANGE * rng()
+                : LOW_HEIGHT_MIN + rng() * LOW_HEIGHT_RANGE;
+
+            pickups.push(new Pickup(x, groundY - height, value, kind));
         }
 
         seg = pickups;
