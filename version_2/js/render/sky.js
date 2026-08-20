@@ -1,7 +1,7 @@
 import { lerpColor, rgb, clamp } from '../core/math.js';
 import { getSprite } from './assets.js';
 import {
-    MOON_PHASE_FRAMES, SUN_FRAMES,
+    MOON_PHASE_FRAMES, SUN_FRAMES, BIRD_FRAMES,
     CLOUD_CUMULUS_FRAMES, CLOUD_CIRRUS_FRAMES, CLOUD_STRATUS_FRAMES,
 } from './spriteManifest.js';
 
@@ -13,13 +13,6 @@ const CLOUD_SPRITE_POOLS = {
 
 // Sky, celestials and clouds. Legitimately screen-space: the sun and moon
 // should read as infinitely distant, so they do not parallax at all.
-//
-// Ported from the old environment.js with one behavioural fix: time now
-// advances per SECOND (`time += DAY_SPEED * dt`) rather than per frame. The
-// old `time += 0.01` ran the day/night cycle at double speed on a 120Hz
-// display, and at half speed if the frame rate dropped.
-
-const CYCLE_DURATION = 120;
 
 // The sky is driven by DISTANCE, not by wall clock: one sun-and-moon arc is
 // exactly one trading day, so the day counter in the HUD and the celestials can
@@ -33,6 +26,33 @@ const CYCLE_DURATION = 120;
 // day rolls over in the morning like a real trading session.
 const PHASE_OFFSET = 0.1;
 
+// Phase boundaries shared by every dusk/night/dawn-dependent draw below
+// (darkness, horizon color, stars, sky gradient, sun/moon visibility+arc) -
+// reading them all from one set of constants instead of each function
+// hardcoding its own magic numbers is what keeps them in sync when the
+// window changes, rather than drifting apart the next time night length
+// gets retuned.
+const DUSK_START = 0.55;      // darkness begins ramping up, moon starts rising
+const NIGHT_START = 0.62;     // full dark reached, stars start fading in
+const NIGHT_END = 0.93;       // dawn ramp begins, moon sets, sun returns
+const DAWN_END = 1.0;         // dawn ramp ends
+const DUSK_SUN_LINGER = 0.05; // sun stays visible this long past NIGHT_START
+const STAR_FADE_IN = 0.05;
+const HORIZON_LAG = 0.15;     // horizon glow lags the overhead sky/darkness
+const MOON_ARC_PEAK = 0.15;   // moon's arc apex height fraction (sun's is 0.1)
+
+// horizonColor()'s five-stop wheel keeps the same proportions the original
+// hardcoded breakpoints had relative to the old NIGHT_START(0.70)/
+// NIGHT_END(0.95) anchors, scaled to fit the new NIGHT_START..NIGHT_END gap -
+// widening night changes the wheel's span, not its shape.
+const NIGHT_GAP = NIGHT_END - NIGHT_START;
+const DAY_GAP = 1 - NIGHT_GAP;
+const SUNSET_TO_NIGHT_RAMP = NIGHT_GAP * 0.8;
+const NIGHT_TO_PREDAWN_RAMP = NIGHT_GAP * 0.2;
+const PREDAWN_TO_SUNRISE_RAMP = DAY_GAP * (0.10 / 0.75);
+const SUNRISE_TO_DAY_RAMP = DAY_GAP * (0.35 / 0.75);
+const DAY_TO_SUNSET_RAMP = DAY_GAP * (0.30 / 0.75);
+
 const PREDAWN = { r: 40, g: 40, b: 80 };
 const SUNRISE = { r: 255, g: 180, b: 50 };
 const DAY = { r: 135, g: 206, b: 235 };
@@ -40,16 +60,37 @@ const SUNSET = { r: 255, g: 100, b: 80 };
 const NIGHT = { r: 20, g: 20, b: 60 };
 const DARK_HORIZON = { r: 10, g: 10, b: 30 };
 
+// Curated subset of SUN_FRAMES's 12 variants that actually reads as a warm
+// dawn->noon->dusk sweep, picked by eye off assets/sprites/sky/sun/
+// spritesheet.png: 4 and 7 are dark red/maroon "horizon" tones, 2 is
+// red-orange, 8 mid orange, 0 the palest/brightest gold (used as midday).
+// Indices 3, 5, 6, 9, 10, 11 (two pale "eclipse" ghost-whites, four
+// purple/mauve/grey "stormy" tones) are deliberately left out of this sweep
+// and stay unused here - candidates for a future special-sky (eclipse/storm)
+// feature, not wired to anything yet.
+const SUN_TIME_OF_DAY_FRAMES = [4, 2, 0, 8, 7].map(i => SUN_FRAMES[i]);
+
+/** Nearest pair of entries in `list` to `progress` (0..1), plus the blend fraction between them. */
+function frameBlend(list, progress) {
+    const n = list.length;
+    const fp = clamp(progress, 0, 1) * (n - 1);
+    const idx0 = Math.min(n - 2, Math.floor(fp));
+    return { a: list[idx0], b: list[idx0 + 1], frac: fp - idx0 };
+}
+
+const BIRD_COUNT = 8;
+const BIRD_FLAP_SPEED = 6; // radians/sec, procedural wing-flap fallback only
+
 export class Sky {
     constructor(rngSeedless = Math.random) {
         this._phase = PHASE_OFFSET;
         this._phaseOverride = undefined;
         this.dayIndex = 0;
         this.cloudFreeDay = rngSeedless() > 0.5;
-        this.sunVariant = Math.floor(rngSeedless() * SUN_FRAMES.length);
         this.moonPhaseOffset = Math.floor(rngSeedless() * 28);
         this.stars = [];
         this.clouds = [];
+        this.birds = [];
         this._w = 0;
         this._h = 0;
     }
@@ -60,6 +101,7 @@ export class Sky {
         this._h = h;
         this._initStars();
         this._initClouds();
+        this._initBirds();
     }
 
     _initStars() {
@@ -133,8 +175,26 @@ export class Sky {
         }
     }
 
+    _initBirds() {
+        this.birds = [];
+        for (let i = 0; i < BIRD_COUNT; i++) {
+            const dir = Math.random() < 0.5 ? 1 : -1;
+            this.birds.push({
+                x: Math.random() * this._w,
+                y: this._h * 0.08 + Math.random() * this._h * 0.27,
+                speed: Math.random() * 50 + 40, // px/s
+                dir,
+                // Style variant this instance may draw instead of the
+                // procedural chevron, chosen once - same per-instance-random
+                // pattern as clouds above.
+                spriteId: BIRD_FRAMES[Math.floor(Math.random() * BIRD_FRAMES.length)],
+                flapPhase: Math.random() * Math.PI * 2,
+            });
+        }
+    }
+
     /**
-     * @param dt        seconds, for cloud drift only
+     * @param dt        seconds, for cloud/bird drift only
      * @param day       integer trading-day index
      * @param fraction  0..1 progress through that day
      */
@@ -143,15 +203,21 @@ export class Sky {
             if (day !== this.dayIndex) {
                 this.dayIndex = day;
                 this.cloudFreeDay = Math.random() > 0.5;
-                this.sunVariant = Math.floor(Math.random() * SUN_FRAMES.length);
             }
             this._phase = (fraction + PHASE_OFFSET) % 1;
         }
 
-        // Clouds still drift in real time - they are weather, not a clock.
+        // Clouds and birds still drift/flap in real time - they're weather
+        // and wildlife, not a clock.
         for (const c of this.clouds) {
             c.x -= c.speed * dt;
             if (c.x + c.maxSize * 2 < 0) c.x = this._w + c.maxSize * 2;
+        }
+        for (const b of this.birds) {
+            b.x -= b.speed * b.dir * dt;
+            if (b.dir > 0 && b.x < -40) b.x = this._w + 40;
+            else if (b.dir < 0 && b.x > this._w + 40) b.x = -40;
+            b.flapPhase += dt * BIRD_FLAP_SPEED;
         }
     }
 
@@ -165,23 +231,32 @@ export class Sky {
     }
 
     /** 0 = full daylight, 1 = fully dark. Drives the night pass and headlight. */
-    getDarkness() {
-        const t = this.t;
-        if (t >= 0.65 && t < 0.7) return (t - 0.65) / 0.05;
-        if (t >= 0.7 && t < 0.95) return 1;
-        if (t >= 0.95) return 1 - (t - 0.95) / 0.05;
+    getDarkness(t = this.t) {
+        if (t >= DUSK_START && t < NIGHT_START) return (t - DUSK_START) / (NIGHT_START - DUSK_START);
+        if (t >= NIGHT_START && t < NIGHT_END) return 1;
+        if (t >= NIGHT_END && t < DAWN_END) return 1 - (t - NIGHT_END) / (DAWN_END - NIGHT_END);
         return 0;
     }
 
     /** Horizon colour, so distant parallax layers can tint toward it. */
     horizonColor() {
         const t = this.t;
+        const nightColorAt = NIGHT_START + SUNSET_TO_NIGHT_RAMP; // == NIGHT_END - NIGHT_TO_PREDAWN_RAMP
+        const sunriseColorAt = (NIGHT_END + PREDAWN_TO_SUNRISE_RAMP) % 1;
+        const dayColorAt = sunriseColorAt + SUNRISE_TO_DAY_RAMP;
         let sky;
-        if (t >= 0.9 && t < 0.95) sky = lerpColor(NIGHT, PREDAWN, (t - 0.9) * 20);
-        else if (t >= 0.95 || t < 0.05) sky = lerpColor(PREDAWN, SUNRISE, t >= 0.95 ? (t - 0.95) * 10 : (t + 0.05) * 10);
-        else if (t < 0.4) sky = lerpColor(SUNRISE, DAY, (t - 0.05) / 0.35);
-        else if (t < 0.7) sky = lerpColor(DAY, SUNSET, (t - 0.4) / 0.3);
-        else sky = lerpColor(SUNSET, NIGHT, (t - 0.7) / 0.2);
+        if (t >= nightColorAt && t < NIGHT_END) {
+            sky = lerpColor(NIGHT, PREDAWN, (t - nightColorAt) / NIGHT_TO_PREDAWN_RAMP);
+        } else if (t >= NIGHT_END || t < sunriseColorAt) {
+            const d = t >= NIGHT_END ? (t - NIGHT_END) : (t + (1 - NIGHT_END));
+            sky = lerpColor(PREDAWN, SUNRISE, d / PREDAWN_TO_SUNRISE_RAMP);
+        } else if (t < dayColorAt) {
+            sky = lerpColor(SUNRISE, DAY, (t - sunriseColorAt) / SUNRISE_TO_DAY_RAMP);
+        } else if (t < NIGHT_START) {
+            sky = lerpColor(DAY, SUNSET, (t - dayColorAt) / DAY_TO_SUNSET_RAMP);
+        } else {
+            sky = lerpColor(SUNSET, NIGHT, (t - NIGHT_START) / SUNSET_TO_NIGHT_RAMP);
+        }
         return sky;
     }
 
@@ -191,10 +266,10 @@ export class Sky {
         this._drawSun(ctx, w, h);
         this._drawMoon(ctx, w, h);
         this._drawClouds(ctx);
+        this._drawBirds(ctx);
     }
 
     _drawSkyGradient(ctx, w, h) {
-        const t = this.t;
         const skyColor = this.horizonColor();
 
         const lighten = { r: -40, g: -20, b: -20 };
@@ -203,12 +278,13 @@ export class Sky {
             g: Math.max(skyColor.g + lighten.g, 0),
             b: Math.max(skyColor.b + lighten.b, 0),
         };
-        let horizon;
-        if (t < 0.3) horizon = DARK_HORIZON;
-        else if (t < 0.5) horizon = lerpColor(DARK_HORIZON, lit, (t - 0.3) * 5);
-        else if (t < 0.7) horizon = lit;
-        else if (t < 0.9) horizon = lerpColor(lit, DARK_HORIZON, (t - 0.7) * 5);
-        else horizon = DARK_HORIZON;
+        // Horizon lag: the glow right at the horizon lingers behind the
+        // overhead sky's own darkness, matching the old hand-tuned gradient's
+        // "dusk settles up top before it reaches the horizon" look, but now
+        // permanently in sync with getDarkness() instead of five more
+        // independently hand-tuned breakpoints that could drift apart.
+        const horizonT = ((this.t - HORIZON_LAG) % 1 + 1) % 1;
+        const horizon = lerpColor(lit, DARK_HORIZON, this.getDarkness(horizonT));
 
         const g = ctx.createLinearGradient(0, 0, 0, h);
         g.addColorStop(0, rgb(skyColor));
@@ -220,9 +296,9 @@ export class Sky {
     _drawStars(ctx) {
         const t = this.t;
         let vis = 0;
-        if (t >= 0.7 && t < 0.75) vis = (t - 0.7) / 0.05;
-        else if (t >= 0.75 && t < 0.95) vis = 1;
-        else if (t >= 0.95) vis = Math.max(0, 1 - (t - 0.95) / 0.05);
+        if (t >= NIGHT_START && t < NIGHT_START + STAR_FADE_IN) vis = (t - NIGHT_START) / STAR_FADE_IN;
+        else if (t >= NIGHT_START + STAR_FADE_IN && t < NIGHT_END) vis = 1;
+        else if (t >= NIGHT_END) vis = Math.max(0, 1 - (t - NIGHT_END) / (DAWN_END - NIGHT_END));
         if (vis <= 0) return;
 
         for (const s of this.stars) {
@@ -244,52 +320,70 @@ export class Sky {
 
     _drawSun(ctx, w, h) {
         const t = this.t;
-        if (!(t >= 0.95 || t < 0.75)) return;
-        const progress = t >= 0.95 ? ((t - 0.95) / 0.05) * 0.25 : t + 0.25;
+        const duskEnd = NIGHT_START + DUSK_SUN_LINGER;
+        if (!(t < duskEnd || t >= NIGHT_END)) return;
+        const sunVisibleWidth = (1 - NIGHT_END) + duskEnd;
+        const progress = (((t - NIGHT_END) % 1 + 1) % 1) / sunVisibleWidth;
         const { x, y } = this._arc(progress, w, h, 0.1);
 
-        // this.sunVariant is rolled once per day (see update()), not by
-        // time of day - the art's own color IS the day's look, so this
-        // replaces the time-of-day tint below rather than picking a frame
-        // per t bucket the way the moon picks by phase.
-        const sprite = getSprite(SUN_FRAMES[this.sunVariant]);
-        if (sprite) {
+        // Sun sprites are picked by time-of-day (this same `progress`, the
+        // single source of truth for "how far through the visible arc"),
+        // crossfaded between the two nearest curated frames - see
+        // SUN_TIME_OF_DAY_FRAMES above for which of the 12 sky.sun variants
+        // made the cut and why.
+        const { a, b, frac } = frameBlend(SUN_TIME_OF_DAY_FRAMES, progress);
+        const s0 = getSprite(a);
+        const s1 = getSprite(b);
+        if (s0 || s1) {
             // Sprite art already bakes in its own glow rings (unlike the
             // moon's plain disc), so it's drawn bigger than the procedural
             // circle's 30px radius to keep those rings visible, with no
             // extra ctx.shadowBlur layered on top.
             const size = 100;
-            const scale = size / sprite.width;
-            const w2 = sprite.width * scale, h2 = sprite.height * scale;
-            ctx.drawImage(sprite, x - w2 / 2, y - h2 / 2, w2, h2);
+            const drawOne = (sprite, alpha) => {
+                if (!sprite || alpha <= 0) return;
+                const scale = size / sprite.width;
+                const w2 = sprite.width * scale, h2 = sprite.height * scale;
+                ctx.globalAlpha = alpha;
+                ctx.drawImage(sprite, x - w2 / 2, y - h2 / 2, w2, h2);
+            };
+            // True crossfade (source-over + alpha, not 'lighter') so the
+            // overlap never exceeds either frame's own brightness. If only
+            // one of the pair has loaded, draw it at full alpha rather than
+            // fading toward nothing - a partially-populated sprite pool is
+            // a normal state (see PROMPTS.md), not an edge case.
+            if (s0 && s1) { drawOne(s0, 1 - frac); drawOne(s1, frac); }
+            else drawOne(s0 || s1, 1);
+            ctx.globalAlpha = 1;
             return;
         }
 
-        let r = 255, g = 255, b = 0;
-        if (t >= 0.95 || t < 0.05) {
-            const d = t >= 0.95 ? (t - 0.95) / 0.1 : (t + 0.05) / 0.1;
+        let r = 255, g = 255, b2 = 0;
+        const sunriseEnd = (NIGHT_END + 0.1) % 1;
+        if (t >= NIGHT_END || t < sunriseEnd) {
+            const d = t >= NIGHT_END ? (t - NIGHT_END) / 0.1 : (t + (1 - NIGHT_END)) / 0.1;
             g = 160 + (255 - 160) * d;
-            b = 60 + (0 - 60) * d;
-        } else if (t >= 0.65 && t < 0.75) {
-            const d = (t - 0.65) / 0.1;
+            b2 = 60 + (0 - 60) * d;
+        } else if (t >= DUSK_START && t < DUSK_START + 0.1) {
+            const d = (t - DUSK_START) / 0.1;
             g = 255 - (255 - 160) * d;
-            b = 0 + 60 * d;
+            b2 = 0 + 60 * d;
         }
 
         ctx.save();
         ctx.shadowBlur = 24;
-        ctx.shadowColor = `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b / 2)}, 0.6)`;
+        ctx.shadowColor = `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b2 / 2)}, 0.6)`;
         ctx.beginPath();
         ctx.arc(x, y, 30, 0, Math.PI * 2);
-        ctx.fillStyle = `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
+        ctx.fillStyle = `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b2)})`;
         ctx.fill();
         ctx.restore();
     }
 
     _drawMoon(ctx, w, h) {
         const t = this.t;
-        if (!(t >= 0.7 && t < 0.95)) return;
-        const { x, y } = this._arc((t - 0.7) / 0.25, w, h, 0.4);
+        if (!(t >= DUSK_START && t < NIGHT_END)) return;
+        const { x, y } = this._arc((t - DUSK_START) / (NIGHT_END - DUSK_START), w, h, MOON_ARC_PEAK);
         const radius = 25;
 
         // Real lunar month, advancing one trading day at a time.
@@ -404,6 +498,40 @@ export class Sky {
                     ctx.fillRect(c.x - lw / 2, c.y + l.oy - height * 0.25, lw, height * 0.5);
                 }
             }
+        }
+    }
+
+    _drawBirds(ctx) {
+        // Fade out with the same darkness ramp everything else uses, rather
+        // than a new independent threshold - birds have gone to roost by the
+        // time it's fully dark.
+        const vis = 1 - this.getDarkness();
+        if (vis <= 0) return;
+
+        for (const b of this.birds) {
+            const sprite = getSprite(b.spriteId);
+            if (sprite) {
+                ctx.save();
+                ctx.translate(b.x, b.y);
+                ctx.scale(b.dir, 1); // faces its direction of travel
+                ctx.globalAlpha = vis;
+                const size = 32;
+                const scale = size / sprite.width;
+                const w = sprite.width * scale, h = sprite.height * scale;
+                ctx.drawImage(sprite, -w / 2, -h / 2, w, h);
+                ctx.restore();
+                continue;
+            }
+
+            // Simple animated chevron/"M" wing shape, flapping via flapPhase.
+            const flap = Math.sin(b.flapPhase) * 6 + 8;
+            ctx.strokeStyle = `rgba(60, 60, 70, ${vis * 0.8})`;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(b.x - 8, b.y - flap);
+            ctx.lineTo(b.x, b.y);
+            ctx.lineTo(b.x + 8, b.y - flap);
+            ctx.stroke();
         }
     }
 }

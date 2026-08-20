@@ -94,6 +94,24 @@ export const CLOUD_CUMULUS_FRAMES = variantIds('sky.cumulus', 17);
 export const CLOUD_CIRRUS_FRAMES = variantIds('sky.cirrus', 16);
 export const CLOUD_STRATUS_FRAMES = variantIds('sky.stratus', 17);
 
+// Birds are screen-space and per-instance random style choices, same
+// treatment as clouds above (see Sky._initBirds in render/sky.js) - not
+// sequential states like sun/moon.
+export const BIRD_FRAMES = variantIds('sky.bird', 6);
+
+// Foreground depth animals (world/animals.js) - one sprite pool per species,
+// grouped under BIOME_ANIMAL_SPECIES below so each Animal instance can pick
+// both a spriteId (art) and a stable kind (procedural fallback shape)
+// together, unlike the flat BIOME_CLUTTER_SPRITES-style pools above.
+const FIELDS_RABBIT = variantIds('fields.rabbit', 4);
+const FIELDS_SHEEP = variantIds('fields.sheep', 3);
+const WOODS_DEER = variantIds('woods.deer', 4);
+const WOODS_FOX = variantIds('woods.fox', 4);
+const BEACH_SEAGULL = variantIds('beach.seagull', 3);
+const BEACH_CRAB = variantIds('beach.crab', 4);
+const MOUNTAINS_GOAT = variantIds('mountains.goat', 4);
+const MOUNTAINS_MARMOT = variantIds('mountains.marmot', 3);
+
 export const SPRITE_MANIFEST = [
     ...PLAYER_RIG_FRAMES.map((id, i) => ({ id, path: `${BASE}/player/rig-${i}.png` })),
 
@@ -125,6 +143,17 @@ export const SPRITE_MANIFEST = [
     ...variantEntries('sky.cumulus', 'sky/clouds', 'cumulus', CLOUD_CUMULUS_FRAMES.length),
     ...variantEntries('sky.cirrus', 'sky/clouds', 'cirrus', CLOUD_CIRRUS_FRAMES.length),
     ...variantEntries('sky.stratus', 'sky/clouds', 'stratus', CLOUD_STRATUS_FRAMES.length),
+
+    ...variantEntries('sky.bird', 'sky/birds', 'bird', BIRD_FRAMES.length),
+
+    ...variantEntries('fields.rabbit', 'fields', 'rabbit', FIELDS_RABBIT.length),
+    ...variantEntries('fields.sheep', 'fields', 'sheep', FIELDS_SHEEP.length),
+    ...variantEntries('woods.deer', 'woods', 'deer', WOODS_DEER.length),
+    ...variantEntries('woods.fox', 'woods', 'fox', WOODS_FOX.length),
+    ...variantEntries('beach.seagull', 'beach', 'seagull', BEACH_SEAGULL.length),
+    ...variantEntries('beach.crab', 'beach', 'crab', BEACH_CRAB.length),
+    ...variantEntries('mountains.goat', 'mountains', 'goat', MOUNTAINS_GOAT.length),
+    ...variantEntries('mountains.marmot', 'mountains', 'marmot', MOUNTAINS_MARMOT.length),
 ];
 
 // Which sprites a Tree instance (tall, bottom-anchored) vs a Rock instance
@@ -154,4 +183,27 @@ export const BIOME_CLUTTER_SPRITES = {
     woods: WOODS_FALLEN_LOG,
     beach: [...BEACH_DRIFTWOOD, ...BEACH_UMBRELLA],
     mountains: [...MOUNTAINS_BOULDER, ...MOUNTAINS_SNOW_PATCH, ...MOUNTAINS_DEAD_TREE_FALLEN],
+};
+
+// Foreground depth animals per biome (world/animals.js's AnimalField picks a
+// species, then a variant within it) - grouped as {kind, sprites} rather than
+// one flat pool since each Animal instance needs both a spriteId (art path)
+// and a stable kind (procedural fallback shape) kept in sync.
+export const BIOME_ANIMAL_SPECIES = {
+    fields: [
+        { kind: 'rabbit', sprites: FIELDS_RABBIT, heightMin: 18, heightRange: 8 },
+        { kind: 'sheep', sprites: FIELDS_SHEEP, heightMin: 45, heightRange: 15 },
+    ],
+    woods: [
+        { kind: 'deer', sprites: WOODS_DEER, heightMin: 55, heightRange: 20 },
+        { kind: 'fox', sprites: WOODS_FOX, heightMin: 28, heightRange: 10 },
+    ],
+    beach: [
+        { kind: 'seagull', sprites: BEACH_SEAGULL, heightMin: 22, heightRange: 8 },
+        { kind: 'crab', sprites: BEACH_CRAB, heightMin: 14, heightRange: 6 },
+    ],
+    mountains: [
+        { kind: 'goat', sprites: MOUNTAINS_GOAT, heightMin: 45, heightRange: 15 },
+        { kind: 'marmot', sprites: MOUNTAINS_MARMOT, heightMin: 20, heightRange: 8 },
+    ],
 };

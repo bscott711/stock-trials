@@ -6,6 +6,7 @@ import { Terrain, PIXELS_PER_DAY } from './world/terrain.js';
 import { Scenery } from './world/scenery.js';
 import { PickupField } from './world/pickups.js';
 import { HazardField } from './world/hazards.js';
+import { AnimalField } from './world/animals.js';
 import { Renderer } from './render/renderer.js';
 import { Sky } from './render/sky.js';
 import { Parallax } from './render/parallax.js';
@@ -52,6 +53,7 @@ async function main() {
     const scenery = new Scenery(terrain, seed);
     const pickups = new PickupField(terrain, seed);
     const hazards = new HazardField(terrain, seed);
+    const animals = new AnimalField(terrain, seed);
     const portfolio = new Portfolio();
     const parallax = new Parallax();
     const input = new Input(canvas);
@@ -222,7 +224,7 @@ async function main() {
 
         render() {
             renderer.draw({
-                camera, sky, terrain, scenery, pickups, hazards, parallax, debug, seed,
+                camera, sky, terrain, scenery, pickups, hazards, animals, parallax, debug, seed,
 
                 drawPlayfield(ctx, darkness) {
                     ctx.save();

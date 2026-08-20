@@ -4,6 +4,15 @@ import { rgb } from '../core/math.js';
 // Owns the canvas, the device-pixel-ratio contract and the layer order.
 // No other module touches ctx transform state.
 
+// Foreground depth animals (world/animals.js) draw under a parallax factor
+// slightly ABOVE 1 - the opposite of parallax.js's distant background
+// layers - so they read as a shallow plane nearer than the playfield rather
+// than glued to it. They're deliberately not meant to pixel-align with the
+// real ground the way scenery/hazards must, so the resulting screen-position
+// drift from the true terrain as the camera moves is the intended depth
+// cue, not a bug.
+const ANIMAL_PARALLAX = 1.15;
+
 export class Renderer {
     constructor(canvas) {
         this.canvas = canvas;
@@ -29,7 +38,7 @@ export class Renderer {
         if (sky) sky.resize(this.cssW, this.cssH);
     }
 
-    draw({ camera, sky, terrain, scenery, pickups, hazards, parallax, drawPlayfield, drawHud, debug, seed }) {
+    draw({ camera, sky, terrain, scenery, pickups, hazards, animals, parallax, drawPlayfield, drawHud, debug, seed }) {
         const ctx = this.ctx;
         const darkness = sky.getDarkness();
 
@@ -50,6 +59,15 @@ export class Renderer {
         scenery.draw(ctx, bounds);
         if (hazards) hazards.draw(ctx, bounds);
         if (pickups) pickups.draw(ctx, bounds);
+
+        // 3.5 Foreground depth animals - a shallow plane below the rideable
+        //     ground, parallax factor > 1 so it reads as nearer than the
+        //     playfield. No transform restore needed after: step 4 below
+        //     immediately calls applyScreen(), which resets it outright.
+        if (animals) {
+            camera.applyParallax(ctx, ANIMAL_PARALLAX, ANIMAL_PARALLAX);
+            animals.draw(ctx, bounds);
+        }
 
         // 4. Night pass. Order is the whole trick: darken the world FIRST, then
         //    draw additive lights on top. The old code composited the headlight

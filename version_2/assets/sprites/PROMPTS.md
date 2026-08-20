@@ -80,13 +80,15 @@ and compare pixel-wise to frame 0 - the lowest-error non-trivial match is one
 full revolution later, and evenly-spaced frames between there and frame 0
 are your pose set.
 
-**Headlight:** the game's night-riding headlight cone (`drawHeadlight()` in
-`js/drawbike.js`) isn't currently wired up to any rig art - it was dropped
-when this BMX-style reference didn't have an obvious mount point for one. If
-a future reference clip has a light built into the design (helmet lamp,
-handlebar-mounted light), pixel-measure its position the same way the old
-`HEADLIGHT_X/Y` constants were measured off `frame.png`, then wire
-`drawHeadlight()` back into `js/render/playerSprite.js`'s `drawPlayer()`.
+**Headlight:** the game's night-riding headlamp (`drawHeadlight()` in
+`js/render/headlight.js`) is a purely geometric overlay - a beam cone plus a
+diffuse pool of light on the ground ahead - anchored at the rig's
+approximate handlebar position (`computeRig()`'s `handlebar_x/y`) rather
+than any pixel measured off the art. It does **not** need a drawn mount
+point in the rig reference to work, so no art changes are required for it;
+if a future reference clip does add one anyway (helmet lamp, handlebar-
+mounted light), the anchor in `headlight.js` can be retuned to match it, but
+that's a nice-to-have, not a requirement.
 
 Run: `uv run tools/build_player_rig.py <clip.mp4> version_2/assets/sprites/player --frames 0,4,7,11,14,18`
 (see the script's own docstring for exactly what each step does, and for how
@@ -123,6 +125,51 @@ Run: `uv run tools/build_player_rig.py <clip.mp4> version_2/assets/sprites/playe
 | 13 | Rolled hay bale, side view (oval + 2 horizontal binding lines), gold/straw color. Canvas 90×90px, centered. | `fields/hay-bale.png` |
 | 14 | Small wildflower clump, a few green stems, 4-5 simple colorful flower dots. Canvas 70×70px, bottom-weighted (base near x=35,y=60). | `fields/wildflower-clump.png` |
 | 15 | Weathered wooden fence post, 1-2 short horizontal rail stubs. Canvas 40×100px, bottom-center anchored. | `fields/fence-post.png` |
+
+## Animals
+
+Foreground silhouettes glimpsed in the space below the rideable path
+(`js/world/animals.js`, `AnimalField`) - purely decorative depth accents
+that never affect the bike (no collision, no scoring), drawn under their own
+parallax factor so they read as a shallow plane nearer than the main
+playfield rather than glued to it. Bottom-anchored like Trees (feet/base at
+the canvas bottom-center), one subject per prompt like the biome tables
+above, not a contact sheet - each is a genuinely different animal, not style
+variants of the same one, unlike Woods/Beach/Mountains/Fields' clutter.
+
+### Fields
+
+| # | Subject + sizing | Save as |
+|---|---|---|
+| 22 | Sitting/alert rabbit, simple rounded body, upright ears. Canvas 50×60px, bottom-center anchored. | `fields/rabbit-N.png` |
+| 23 | Grazing sheep, side view, woolly rounded body, short legs. Canvas 90×70px, bottom-center anchored. | `fields/sheep-N.png` |
+
+### Woods
+
+| # | Subject + sizing | Save as |
+|---|---|---|
+| 24 | Standing deer, side view, slender legs, small antlers. Canvas 100×110px, bottom-center anchored. | `woods/deer-N.png` |
+| 25 | Fox, side view, bushy tail, alert pose. Canvas 80×60px, bottom-center anchored. | `woods/fox-N.png` |
+
+### Beach
+
+| # | Subject + sizing | Save as |
+|---|---|---|
+| 26 | Standing seagull, side view, folded wings. Canvas 60×70px, bottom-center anchored. | `beach/seagull-N.png` |
+| 27 | Crab, side view, claws visible. Canvas 60×40px, bottom-center anchored. | `beach/crab-N.png` |
+
+### Mountains
+
+| # | Subject + sizing | Save as |
+|---|---|---|
+| 28 | Mountain goat, side view, sturdy legs, small horns. Canvas 90×90px, bottom-center anchored. | `mountains/goat-N.png` |
+| 29 | Marmot, side view, low rounded body. Canvas 60×40px, bottom-center anchored. | `mountains/marmot-N.png` |
+
+Save 3-4 numbered variants per species (`rabbit-0.png`, `rabbit-1.png`, …),
+matching the smaller existing biome counts - `js/render/spriteManifest.js`'s
+`BIOME_ANIMAL_SPECIES` already expects that many for each (see its
+`heightMin`/`heightRange` per species for the in-game world-unit size each
+should read as).
 
 ## Hazards
 
@@ -176,10 +223,26 @@ into `js/render/sky.js`, and `sky/moon/moon-0.png` … `moon-7.png` exist.
 Sun and moon variants are **sequential states**, not random style
 choices - whatever wires the sliced sprites in should pick by time-of-day
 / lunar-phase index (the way `player.rig0..rig5` are picked by pedal-angle
-bucket), not at random like a tree or rock. Cloud variants ARE random
-style choices, same as the biome clutter above.
+bucket), not at random like a tree or rock. Cloud (and Bird, below) variants
+ARE random style choices, same as the biome clutter above.
 
 ### Sun
+
+**Done, but the 12 delivered variants aren't a clean color gradient** - the
+sheet that actually landed (`sky/sun/spritesheet.png`, sliced into
+`sun-0.png`…`sun-11.png`) is a grab-bag: about six warm gold/orange/red
+tones, two pale "ghost-white" ones, and four purple/mauve/grey "stormy"
+ones, in no particular order. `_drawSun()` (`js/render/sky.js`) crossfades
+across a **curated** ordered subset - `SUN_TIME_OF_DAY_FRAMES = [4, 2, 0, 8,
+7]` (indices into the 12) - picked by eye to read as a believable warm
+dawn→noon→dusk sweep (maroon → red-orange → palest/brightest gold → orange →
+dark red). The other 6 indices (3, 5, 6, 9, 10, 11) are unused by that sweep
+on purpose, kept in the sprite pool as candidates for a future special-sky
+feature (eclipse for the ghost-whites, storm for the purples/greys) - not
+wired to anything yet. If more sun variants ever get generated, prefer ones
+that fit cleanly into the existing warm sweep (or extend it) over more
+grab-bag moods; if the curated indices get retuned, update the comment above
+`SUN_TIME_OF_DAY_FRAMES` in `sky.js` to match.
 
 | # | Subject + sizing | Save as |
 |---|---|---|
@@ -218,6 +281,21 @@ one generic cloud - generate each as its own sheet of style variants:
 | 19 | Wispy cirrus cloud, 4-5 variants, thin curved streaks/strands, sparse and airy rather than a solid mass. Canvas 500×160px per variant, center-anchored. | `sky/cirrus/spritesheet.png` |
 | 20 | Flat stratus cloud band, 4-5 variants, a low horizontal layer with a soft feathered edge. Canvas 600×140px per variant, center-anchored. | `sky/stratus/spritesheet.png` |
 
+### Birds
+
+Screen-space overlay like Sun/Clouds (not scaled by world distance) -
+`Sky._drawBirds()` in `js/render/sky.js` drifts a handful of them across the
+upper sky and fades them out at night alongside the stars/moon. Contact-
+sheet convention like Clouds, and (unlike Sun/Moon) **random per-instance
+style pick**, not sequential - each bird instance just grabs one variant for
+its lifetime, the same way a cloud instance does. The flapping motion comes
+from the procedural fallback's own animated wing shape, not from swapping
+sprite frames, so poses can be static.
+
+| # | Subject + sizing | Save as |
+|---|---|---|
+| 21 | Small flying bird silhouette, side/three-quarter view, wings in a shallow glide pose, 5-6 variants side by side (a mix of species/colors). Canvas 60×40px per variant, center-anchored. | `sky/birds/spritesheet.png` |
+
 ## Notes on sizing
 
 - **Trees/tall objects** are drawn bottom-anchored and scaled so the drawn
@@ -234,19 +312,21 @@ one generic cloud - generate each as its own sheet of style variants:
   at the canvas bottom edge, not centered) but scaled by *width*, same as
   Clutter. The fallen-log clutter sprite doubles as a third hazard skin
   as-is (`js/world/hazards.js`), no separate hazard-specific log art needed.
-- **Sky objects (sun, moon, clouds)** are also center-anchored and scaled
-  off pixel width like clutter, but against a fixed on-screen target size
-  instead of a world-unit one, since they don't move with the camera - see
-  the Sun/Moon/Clouds rows above for the current on-screen size each is
-  matching.
+- **Sky objects (sun, moon, clouds, birds)** are also center-anchored and
+  scaled off pixel width like clutter, but against a fixed on-screen target
+  size instead of a world-unit one, since they don't move with the camera -
+  see the Sun/Moon/Clouds/Birds rows above for the current on-screen size
+  each is matching.
+- **Animals** are bottom-anchored and scaled by height, same convention as
+  Trees - see the Animals section above.
 - **Leg/torso frames**: `build_player_sprites.py` auto-detects each frame's
   hip anchor and normalizes every frame in a group onto a shared canvas so
   they all land on the same anchor point — exact pixel dimensions aren't
   critical, but keeping the hip at roughly the same relative spot across
   every pose in a row is what keeps the pedaling/sway from visibly jumping
   frame to frame.
-- Counting every category above (biome scenery, hazards, sky, and the player
-  rig) is 18 world groups + the player rig, all optional in the sense that each
-  degrades independently back to its procedural look when missing - none
-  are required just to get the game running, only to get sprite art
-  instead of shapes for that particular piece.
+- Counting every category above (biome scenery, animals, hazards, sky, and
+  the player rig) is 21 world groups + the player rig, all optional in the
+  sense that each degrades independently back to its procedural look when
+  missing - none are required just to get the game running, only to get
+  sprite art instead of shapes for that particular piece.

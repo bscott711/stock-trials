@@ -2,6 +2,7 @@ import { getSprite } from './assets.js';
 import { computeRig, drawBikeFrame, drawProceduralWheel } from '../drawbike.js';
 import { drawRiderUpperBody, drawRiderLegs } from '../drawrider.js';
 import { DustEmitter } from './dust.js';
+import { drawHeadlight } from './headlight.js';
 import { PLAYER_RIG_FRAME_COUNT } from './spriteManifest.js';
 
 // The whole bike+rider is one fused sprite per pedal-angle bucket (see
@@ -18,15 +19,16 @@ import { PLAYER_RIG_FRAME_COUNT } from './spriteManifest.js';
 const RIG_ANCHOR_X = 32.62;
 const RIG_ANCHOR_Y = 122.26;
 
-// Headlight is dropped for now: this BMX-style rig has no drawn mount point
-// for one (unlike the old bike), so there's nowhere honest to anchor the
-// light. Revisit if/when a reference frame has one built in.
-
 const dustEmitter = new DustEmitter();
 
 /** state = { distance, darkness, airborne, justLanded, justCrashed, justCollected } */
 export function drawPlayer(ctx, state) {
     const rig = computeRig(state.distance);
+
+    // Drawn before the rig blit so the opaque rig art occludes the beam's
+    // own base - see headlight.js for why that's fine without a pixel-exact
+    // mount point.
+    drawHeadlight(ctx, rig, state);
 
     const frameIndex = angleFrameIndex(rig.pedal_angle, PLAYER_RIG_FRAME_COUNT);
     const rigSprite = getSprite(`player.rig${frameIndex}`);

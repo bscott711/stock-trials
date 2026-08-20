@@ -1,11 +1,13 @@
-// Procedural fallback for the bike rig (frame/seat/pedals/wheels/headlight),
-// used by render/playerSprite.js only when no player.rigN sprite has been
-// generated yet (see assets/sprites/PROMPTS.md) - the normal rendering path
-// is a single fused bike+rider image per pedal-angle bucket, which doesn't
-// use any of this geometry at all. computeRig() is still the single source
-// of truth for the bike's *world-space* motion (wheel/pedal angle, wheel
+// Procedural fallback for the bike rig (frame/seat/pedals/wheels), used by
+// render/playerSprite.js only when no player.rigN sprite has been generated
+// yet (see assets/sprites/PROMPTS.md) - the normal rendering path is a
+// single fused bike+rider image per pedal-angle bucket, which doesn't use
+// any of this geometry at all. computeRig() is still the single source of
+// truth for the bike's *world-space* motion (wheel/pedal angle, wheel
 // positions) that both this fallback and the sprite path need, though - see
-// js/render/playerSprite.js and js/drawrider.js.
+// js/render/playerSprite.js and js/drawrider.js. The headlamp lives
+// separately in js/render/headlight.js, since it overlays both this
+// fallback and the sprite path alike.
 
 export const WHEEL_R = 30; // wheel radius
 const WHEELBASE = 100;
@@ -22,12 +24,6 @@ const SEAT_X = -23.5;
 const SEAT_Y = -54.2;
 const HANDLEBAR_X = 15.5;
 const HANDLEBAR_Y = -69.2;
-
-// Where the handlebar's curve ends and the fork/stem tube begins (not the
-// grip out at HANDLEBAR_X/Y). Used only for the headlight mount in
-// drawHeadlight, which nothing currently calls (see playerSprite.js).
-const HEADLIGHT_X = 28.5;
-const HEADLIGHT_Y = -58.2;
 
 export function computeRig(distanceTraveled) {
     const wheel_angle = (distanceTraveled / WHEEL_R) % (2 * Math.PI);
@@ -186,58 +182,3 @@ export function drawBikeFrame(ctx, rig) {
     ctx.stroke();
 }
 
-export function drawHeadlight(ctx, rig, darknessLevel) {
-    const headlightIntensity = Math.min(1, darknessLevel);
-    const headlightX = HEADLIGHT_X;
-    const headlightY = HEADLIGHT_Y;
-    const headlightLength = 520; // how far the light reaches
-    const CONE_HALF_ANGLE = Math.PI / 13;
-    const spread = headlightLength * Math.tan(CONE_HALF_ANGLE);
-
-    if (headlightIntensity > 0.01) {
-        ctx.save();
-
-        const cone = () => {
-            ctx.beginPath();
-            ctx.moveTo(headlightX, headlightY);
-            ctx.lineTo(headlightX + headlightLength, headlightY - spread);
-            ctx.lineTo(headlightX + headlightLength, headlightY + spread);
-            ctx.closePath();
-        };
-
-        cone();
-        ctx.clip();
-
-        const gradient = ctx.createLinearGradient(
-            headlightX, headlightY,
-            headlightX + headlightLength, headlightY,
-        );
-        gradient.addColorStop(0, `rgba(255, 250, 205, ${0.55 * headlightIntensity})`);
-        gradient.addColorStop(0.45, `rgba(255, 250, 205, ${0.22 * headlightIntensity})`);
-        gradient.addColorStop(1, 'rgba(255, 250, 205, 0)');
-
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.fillStyle = gradient;
-        cone();
-        ctx.fill();
-
-        ctx.restore();
-    }
-
-    // Headlight bulb housing, visible whether lit or not.
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.arc(headlightX, headlightY, 5, 0, 2 * Math.PI);
-    ctx.fill();
-
-    const bulbGradient = ctx.createRadialGradient(
-        headlightX, headlightY, 0,
-        headlightX, headlightY, 10,
-    );
-    bulbGradient.addColorStop(0, `rgba(255, 255, 200, ${0.8 * headlightIntensity})`);
-    bulbGradient.addColorStop(1, 'rgba(255, 255, 200, 0)');
-    ctx.fillStyle = bulbGradient;
-    ctx.beginPath();
-    ctx.arc(headlightX, headlightY, 10, 0, 2 * Math.PI);
-    ctx.fill();
-}
