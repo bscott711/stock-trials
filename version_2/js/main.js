@@ -68,6 +68,16 @@ async function main() {
     renderer.resize(camera, sky);
     camera.snapTo(bike.x, bike.y - camera.viewH * 0.12);
     window.addEventListener('resize', () => renderer.resize(camera, sky));
+    window.addEventListener('orientationchange', () => {
+        input.clear();
+        // Some mobile browsers report stale innerWidth/innerHeight
+        // synchronously here, before layout has actually reflowed to the
+        // new orientation - a short deferral lets that finish first.
+        setTimeout(() => renderer.resize(camera, sky), 100);
+    });
+
+    const rotatePortraitQuery = matchMedia('(pointer: coarse) and (orientation: portrait)');
+    function blockedByOrientation() { return rotatePortraitQuery.matches; }
 
     // Tilt needs a user gesture to be granted on iOS; the first touch is one.
     canvas.addEventListener('pointerdown', function once(e) {
@@ -129,7 +139,29 @@ async function main() {
         // to start audio and ask for tilt permission.
         audio.startIfIdle();
         if (matchMedia('(hover: none)').matches) input.enableTilt();
+        // Best-effort only: iOS Safari has no such API at all, and Android
+        // Chrome only honors it in fullscreen - neither is guaranteed, which
+        // is why the CSS rotate-block overlay is the real mechanism.
+        screen.orientation?.lock?.('landscape').catch(() => {});
     }
+
+    // Real DOM buttons, not canvas position - each owns exactly one Input
+    // action. Pointer capture on the button itself keeps a sliding finger's
+    // release routed back to it instead of stranding the action "held".
+    function bindTouchButton(el, action) {
+        el.addEventListener('pointerdown', (e) => {
+            el.setPointerCapture?.(e.pointerId);
+            input.setAction(action, 1);
+            e.preventDefault();
+        });
+        const release = () => input.setAction(action, 0);
+        el.addEventListener('pointerup', release);
+        el.addEventListener('pointercancel', release);
+        el.addEventListener('lostpointercapture', release);
+    }
+    bindTouchButton(document.getElementById('btnAccel'), 'accel');
+    bindTouchButton(document.getElementById('btnBrake'), 'brake');
+    bindTouchButton(document.getElementById('btnJump'), 'jump');
 
     helpOverlay.addEventListener('click', hideHelp);
     helpBtn.addEventListener('click', (e) => {
@@ -148,7 +180,7 @@ async function main() {
 
     const loop = createLoop({
         update(dt) {
-            if (paused) {
+            if (paused || blockedByOrientation()) {
                 // Keep clouds drifting behind the panel, but freeze the ride.
                 sky.update(dt, terrain.dayAt(bike.x), terrain.dayFraction(bike.x));
                 camera.update(dt);
@@ -157,7 +189,13 @@ async function main() {
             }
 
             if (input.pressed('help')) { showHelp(); input.endFrame(); return; }
-            if (input.pressed('restart')) { bike.reset(Math.max(0, bike.x - RESPAWN_BACKUP)); prevFlipBonus = 0; }
+            // Jump has no other meaning while crashed (bike.update()'s crashed
+            // branch never reads input), so it doubles as the touch-reachable
+            // retry - R stays the desktop one.
+            if (input.pressed('restart') || (bike.crashed && input.pressed('jump'))) {
+                bike.reset(Math.max(0, bike.x - RESPAWN_BACKUP));
+                prevFlipBonus = 0;
+            }
             if (input.pressed('mute')) { audio.toggleMute(); sfx.setMuted(audio.muted); }
 
             bike.update(dt, input);
@@ -268,7 +306,7 @@ async function main() {
                         ctx.font = 'bold 44px Arial';
                         ctx.fillText('CRASHED', w / 2, h / 2 - 40);
                         ctx.font = '18px Arial';
-                        ctx.fillText('press R to retry', w / 2, h / 2 + 12);
+                        ctx.fillText('press R or tap Jump to retry', w / 2, h / 2 + 12);
                     }
                     ctx.shadowBlur = 0;
                 },

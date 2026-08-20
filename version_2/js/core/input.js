@@ -78,6 +78,11 @@ export class Input {
         this._clearHeld();
     }
 
+    /** Public entry point for external UI (on-screen buttons) to drive an action. */
+    setAction(action, value) {
+        this._set(action, value);
+    }
+
     endFrame() {
         this._pressLatch.clear();
         this._releaseLatch.clear();
@@ -108,18 +113,13 @@ export class Input {
         const c = this.canvas;
 
         const setFromPointer = (e, downState) => {
-            const rect = c.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            if (e.pointerType === 'touch') {
-                // Split the screen: left third brakes, right third accelerates.
-                if (x < rect.width / 3) this._set('brake', downState);
-                else if (x > rect.width * (2 / 3)) this._set('accel', downState);
-                else this._set('jump', downState);
-            } else if (e.button === 2) {
-                this._set('brake', downState);
-            } else {
-                this._set('accel', downState);
-            }
+            // Touch no longer drives accel/brake/jump from canvas position -
+            // those are real on-screen buttons now (see main.js). Pointer
+            // capture + _updatePointerLean below still handle the drag-to-lean
+            // fallback for touch, untouched by this early return.
+            if (e.pointerType === 'touch') return;
+            if (e.button === 2) this._set('brake', downState);
+            else this._set('accel', downState);
         };
 
         c.addEventListener('pointerdown', (e) => {

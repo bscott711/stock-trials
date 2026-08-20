@@ -3,6 +3,7 @@ html, body {
     margin: 0;
     padding: 0;
     height: 100%;
+    height: 100dvh;
     overflow: hidden;
     background-color: #121212;
     font-family: Arial, sans-serif;
@@ -202,4 +203,94 @@ html, body {
 
 @media (hover: hover) {
     .overlay .touch-only { display: none; }
+}
+
+/* --- rotate-to-landscape prompt ---------------------------------------- */
+/* pointer:coarse (not hover/orientation alone) is what keeps a merely
+   narrow/tall desktop window - mouse input, pointer:fine - from ever
+   matching this: only a touch device's real portrait orientation does. */
+
+.rotate-overlay {
+    display: none;
+    z-index: 100; /* above .overlay's default 50, so it wins over a help panel left open */
+    text-align: center;
+}
+
+.rotate-overlay .rotate-icon {
+    font-size: 48px;
+    margin: 0 0 8px;
+    animation: rotate-hint 1.6s ease-in-out infinite;
+}
+
+@keyframes rotate-hint {
+    0%, 100% { transform: rotate(0deg); }
+    50% { transform: rotate(90deg); }
+}
+
+@media (pointer: coarse) and (orientation: portrait) {
+    .rotate-overlay { display: flex; }
+}
+
+/* --- on-screen touch controls ------------------------------------------ */
+
+.touch-controls {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 15; /* above canvas, below the help/rotate overlays */
+    pointer-events: none; /* let drag-to-lean reach the canvas through the gaps */
+}
+
+@media (pointer: coarse) {
+    .touch-controls { display: flex; }
+}
+
+.touch-group {
+    position: absolute;
+    bottom: max(16px, env(safe-area-inset-bottom));
+    left: max(16px, env(safe-area-inset-left));
+    display: flex;
+    gap: 14px;
+}
+
+.touch-btn {
+    pointer-events: auto;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    background: rgba(51, 51, 51, 0.55);
+    color: white;
+    font-size: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.touch-btn:active {
+    background: rgba(85, 85, 85, 0.85);
+}
+
+.touch-btn--jump {
+    position: absolute;
+    right: max(16px, env(safe-area-inset-right));
+    bottom: max(16px, env(safe-area-inset-bottom));
+    width: 76px;
+    height: 76px;
+    font-size: 28px;
+    background: rgba(47, 109, 246, 0.55);
+}
+
+/* The "?" button's default bottom-right spot is now the jump button's -
+   move it out of the way rather than let them overlap. */
+@media (pointer: coarse) {
+    .help-btn {
+        top: max(12px, env(safe-area-inset-top));
+        left: max(12px, env(safe-area-inset-left));
+        right: auto;
+        bottom: auto;
+    }
 }
