@@ -128,14 +128,46 @@ Run: `uv run tools/build_player_rig.py <clip.mp4> version_2/assets/sprites/playe
 
 ## Animals
 
-Foreground silhouettes glimpsed in the space below the rideable path
-(`js/world/animals.js`, `AnimalField`) - purely decorative depth accents
-that never affect the bike (no collision, no scoring), drawn under their own
-parallax factor so they read as a shallow plane nearer than the main
-playfield rather than glued to it. Bottom-anchored like Trees (feet/base at
-the canvas bottom-center), one subject per prompt like the biome tables
-above, not a contact sheet - each is a genuinely different animal, not style
-variants of the same one, unlike Woods/Beach/Mountains/Fields' clutter.
+**Done.** Foreground silhouettes glimpsed in the space below the rideable
+path (`js/world/animals.js`, `AnimalField`) - purely decorative depth
+accents that never affect the bike (no collision, no scoring), drawn under
+their own parallax factor so they read as a shallow plane nearer than the
+main playfield rather than glued to it. Bottom-anchored like Trees
+(feet/base at the canvas bottom-center).
+
+Unlike the individual-file prompts originally sketched below, the art that
+actually landed came as one **contact sheet per biome**
+(`assets/sprites/animals/{fields,woods,beach,mountains}.png`, two species
+per sheet) rather than one file per subject - `tools/build_animal_sprites.py`
+slices each into `<biome>/<kind>-0.png`…`<kind>-N.png`. Two different sheet
+shapes, handled the same way `build_scenery_sprites.py` already treats the
+biome scenery sheets:
+
+- **woods.png** (deer, fox) and **beach.png** (seagull, crab) are loose
+  contact sheets - a species-name caption, then a scattered row (or two
+  sub-rows) of illustrations with no ruled borders. Sliced by
+  connected-component + caption-height filtering (`detect_rows`).
+- **fields.png** (rabbit, sheep) and **mountains.png** (goat, marmot) are
+  ruled grids - a bordered box per variant, captions either baked inside the
+  cell above the art (fields.png) or sitting below the grid entirely
+  (mountains.png, same convention the sky/clouds `GRID_SHEETS` already use).
+  Sliced by measured cell geometry (`slice_grid`), with a per-cell
+  text-height filter added so fields.png's in-cell captions (including one
+  two-line one) never get baked into the crop regardless of how tall a given
+  caption happens to run.
+
+Actual counts per species (not evenly matched, since each sheet simply had
+however many variations landed on it) - `js/render/spriteManifest.js`'s
+`variantIds(...)` calls and `BIOME_ANIMAL_SPECIES` already reflect these:
+rabbit 6, sheep 8, deer 6, fox 8, seagull 6, crab 7 (one is perched on its
+own small sand mound - kept as part of that one sprite, not separated),
+goat 6, marmot 6. If more animal variety ever gets generated, prefer
+matching one of the two existing sheet shapes above (loose contact sheet or
+ruled grid) and extending `tools/build_animal_sprites.py`'s `SHEETS`/
+`GRID_SHEETS` config, rather than hand-slicing new files.
+
+<details>
+<summary>Original per-subject prompt sketch (superseded by the sheets above, kept for reference)</summary>
 
 ### Fields
 
@@ -165,11 +197,7 @@ variants of the same one, unlike Woods/Beach/Mountains/Fields' clutter.
 | 28 | Mountain goat, side view, sturdy legs, small horns. Canvas 90×90px, bottom-center anchored. | `mountains/goat-N.png` |
 | 29 | Marmot, side view, low rounded body. Canvas 60×40px, bottom-center anchored. | `mountains/marmot-N.png` |
 
-Save 3-4 numbered variants per species (`rabbit-0.png`, `rabbit-1.png`, …),
-matching the smaller existing biome counts - `js/render/spriteManifest.js`'s
-`BIOME_ANIMAL_SPECIES` already expects that many for each (see its
-`heightMin`/`heightRange` per species for the in-game world-unit size each
-should read as).
+</details>
 
 ## Hazards
 
@@ -326,7 +354,7 @@ sprite frames, so poses can be static.
   every pose in a row is what keeps the pedaling/sway from visibly jumping
   frame to frame.
 - Counting every category above (biome scenery, animals, hazards, sky, and
-  the player rig) is 21 world groups + the player rig, all optional in the
+  the player rig) is 27 world groups + the player rig, all optional in the
   sense that each degrades independently back to its procedural look when
   missing - none are required just to get the game running, only to get
   sprite art instead of shapes for that particular piece.

@@ -102,15 +102,18 @@ export const BIRD_FRAMES = variantIds('sky.bird', 6);
 // Foreground depth animals (world/animals.js) - one sprite pool per species,
 // grouped under BIOME_ANIMAL_SPECIES below so each Animal instance can pick
 // both a spriteId (art) and a stable kind (procedural fallback shape)
-// together, unlike the flat BIOME_CLUTTER_SPRITES-style pools above.
-const FIELDS_RABBIT = variantIds('fields.rabbit', 4);
-const FIELDS_SHEEP = variantIds('fields.sheep', 3);
-const WOODS_DEER = variantIds('woods.deer', 4);
-const WOODS_FOX = variantIds('woods.fox', 4);
-const BEACH_SEAGULL = variantIds('beach.seagull', 3);
-const BEACH_CRAB = variantIds('beach.crab', 4);
-const MOUNTAINS_GOAT = variantIds('mountains.goat', 4);
-const MOUNTAINS_MARMOT = variantIds('mountains.marmot', 3);
+// together, unlike the flat BIOME_CLUTTER_SPRITES-style pools above. Counts
+// match what tools/build_animal_sprites.py actually sliced out of
+// assets/sprites/animals/{fields,woods,beach,mountains}.png, not the
+// original placeholder guesses from before that art existed.
+const FIELDS_RABBIT = variantIds('fields.rabbit', 6);
+const FIELDS_SHEEP = variantIds('fields.sheep', 8);
+const WOODS_DEER = variantIds('woods.deer', 6);
+const WOODS_FOX = variantIds('woods.fox', 8);
+const BEACH_SEAGULL = variantIds('beach.seagull', 6);
+const BEACH_CRAB = variantIds('beach.crab', 7);
+const MOUNTAINS_GOAT = variantIds('mountains.goat', 6);
+const MOUNTAINS_MARMOT = variantIds('mountains.marmot', 6);
 
 export const SPRITE_MANIFEST = [
     ...PLAYER_RIG_FRAMES.map((id, i) => ({ id, path: `${BASE}/player/rig-${i}.png` })),
