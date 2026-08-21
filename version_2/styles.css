@@ -248,9 +248,13 @@ html, body {
 .touch-group {
     position: absolute;
     bottom: max(16px, env(safe-area-inset-bottom));
+}
+
+.touch-group--left {
     left: max(16px, env(safe-area-inset-left));
-    display: flex;
-    gap: 14px;
+    display: grid;
+    grid-template-columns: repeat(2, 64px);
+    gap: 10px;
 }
 
 .touch-btn {

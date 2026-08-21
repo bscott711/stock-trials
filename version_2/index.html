@@ -20,6 +20,8 @@
 
     <div id="touchControls" class="touch-controls" aria-hidden="true">
         <div class="touch-group touch-group--left">
+            <button id="btnLeanBack" class="touch-btn touch-btn--lean" aria-label="Lean back">&uarr;</button>
+            <button id="btnLeanFwd" class="touch-btn touch-btn--lean" aria-label="Lean forward">&darr;</button>
             <button id="btnBrake" class="touch-btn touch-btn--brake" aria-label="Brake">&#9664;</button>
             <button id="btnAccel" class="touch-btn touch-btn--accel" aria-label="Accelerate">&#9654;</button>
         </div>
@@ -41,9 +43,8 @@
                 <dt><kbd>H</kbd></dt><dd>Show this again</dd>
             </dl>
 
-            <p class="touch-only">On touch: use the on-screen buttons to accelerate, brake and jump.
-                Tilt your device to lean in the air &mdash; or drag on screen if tilt isn't available.
-                Tap Jump to retry after a crash.</p>
+            <p class="touch-only">On touch: use the on-screen buttons to accelerate, brake, jump and lean
+                (tilting or dragging the screen also works). Tap Jump to retry after a crash.</p>
 
             <button id="startBtn" class="start-btn">Click or press any key to ride</button>
         </div>

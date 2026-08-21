@@ -83,6 +83,16 @@ export class Input {
         this._set(action, value);
     }
 
+    /**
+     * Clear a single action's press-latch without touching its held state -
+     * for when a press has already been used to trigger something (e.g. jump
+     * doubling as crash-retry) and must not also register as a fresh press
+     * downstream in the same frame (bike.js's own jump-buffer check).
+     */
+    consume(action) {
+        this._pressLatch.delete(action);
+    }
+
     endFrame() {
         this._pressLatch.clear();
         this._releaseLatch.clear();

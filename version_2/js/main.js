@@ -75,6 +75,7 @@ async function main() {
         // new orientation - a short deferral lets that finish first.
         setTimeout(() => renderer.resize(camera, sky), 100);
     });
+    document.addEventListener('fullscreenchange', () => renderer.resize(camera, sky));
 
     const rotatePortraitQuery = matchMedia('(pointer: coarse) and (orientation: portrait)');
     function blockedByOrientation() { return rotatePortraitQuery.matches; }
@@ -138,11 +139,20 @@ async function main() {
         // This runs inside a real user gesture, so it is also the right moment
         // to start audio and ask for tilt permission.
         audio.startIfIdle();
-        if (matchMedia('(hover: none)').matches) input.enableTilt();
-        // Best-effort only: iOS Safari has no such API at all, and Android
-        // Chrome only honors it in fullscreen - neither is guaranteed, which
-        // is why the CSS rotate-block overlay is the real mechanism.
-        screen.orientation?.lock?.('landscape').catch(() => {});
+        if (matchMedia('(hover: none)').matches) {
+            input.enableTilt();
+            // Best-effort only, and gated to touch so desktop never sees an
+            // unrequested fullscreen prompt. iOS Safari has no fullscreen API
+            // for a regular tab at all (only an installed home-screen PWA
+            // gets true fullscreen there); Android Chrome/iPad do support
+            // this and it's what actually reclaims the browser-chrome space
+            // the CSS rotate-block overlay alone doesn't. Orientation lock
+            // is attempted after, since some browsers only honor it while
+            // already in fullscreen.
+            (document.documentElement.requestFullscreen?.() ?? Promise.resolve())
+                .catch(() => {})
+                .finally(() => { screen.orientation?.lock?.('landscape').catch(() => {}); });
+        }
     }
 
     // Real DOM buttons, not canvas position - each owns exactly one Input
@@ -162,6 +172,8 @@ async function main() {
     bindTouchButton(document.getElementById('btnAccel'), 'accel');
     bindTouchButton(document.getElementById('btnBrake'), 'brake');
     bindTouchButton(document.getElementById('btnJump'), 'jump');
+    bindTouchButton(document.getElementById('btnLeanBack'), 'leanBack');
+    bindTouchButton(document.getElementById('btnLeanFwd'), 'leanFwd');
 
     helpOverlay.addEventListener('click', hideHelp);
     helpBtn.addEventListener('click', (e) => {
@@ -195,6 +207,10 @@ async function main() {
             if (input.pressed('restart') || (bike.crashed && input.pressed('jump'))) {
                 bike.reset(Math.max(0, bike.x - RESPAWN_BACKUP));
                 prevFlipBonus = 0;
+                // Otherwise the same press that triggered this restart is
+                // still latched, and bike.update() below sees it as a fresh
+                // jump on the just-spawned bike this same frame.
+                input.consume('jump');
             }
             if (input.pressed('mute')) { audio.toggleMute(); sfx.setMuted(audio.muted); }
 
