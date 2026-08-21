@@ -228,7 +228,7 @@ html, body {
 }
 
 @media (pointer: coarse) and (orientation: portrait) {
-    .rotate-overlay { display: flex; }
+    html:not(.no-fullscreen) .rotate-overlay { display: flex; }
 }
 
 /* --- on-screen touch controls ------------------------------------------ */

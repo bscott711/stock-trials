@@ -77,8 +77,14 @@ async function main() {
     });
     document.addEventListener('fullscreenchange', () => renderer.resize(camera, sky));
 
+    // Forcing landscape only pays off where we can also go fullscreen to
+    // reclaim the browser-chrome space - otherwise it's just a rotation
+    // prompt that loses portrait without gaining anything back. iOS Safari
+    // has no Fullscreen API for a regular tab, so it's exempted (see the
+    // inline <head> script setting html.no-fullscreen).
+    const hasFullscreen = !document.documentElement.classList.contains('no-fullscreen');
     const rotatePortraitQuery = matchMedia('(pointer: coarse) and (orientation: portrait)');
-    function blockedByOrientation() { return rotatePortraitQuery.matches; }
+    function blockedByOrientation() { return hasFullscreen && rotatePortraitQuery.matches; }
 
     // Tilt needs a user gesture to be granted on iOS; the first touch is one.
     canvas.addEventListener('pointerdown', function once(e) {
@@ -141,17 +147,15 @@ async function main() {
         audio.startIfIdle();
         if (matchMedia('(hover: none)').matches) {
             input.enableTilt();
-            // Best-effort only, and gated to touch so desktop never sees an
-            // unrequested fullscreen prompt. iOS Safari has no fullscreen API
-            // for a regular tab at all (only an installed home-screen PWA
-            // gets true fullscreen there); Android Chrome/iPad do support
-            // this and it's what actually reclaims the browser-chrome space
-            // the CSS rotate-block overlay alone doesn't. Orientation lock
-            // is attempted after, since some browsers only honor it while
-            // already in fullscreen.
-            (document.documentElement.requestFullscreen?.() ?? Promise.resolve())
-                .catch(() => {})
-                .finally(() => { screen.orientation?.lock?.('landscape').catch(() => {}); });
+            // Only attempt where it can actually pay off - see
+            // blockedByOrientation() above for why hasFullscreen gates this.
+            // Best-effort even then: Android Chrome/iPad support both calls,
+            // but neither is guaranteed. Orientation lock is attempted after
+            // fullscreen settles, since some browsers only honor it there.
+            if (hasFullscreen) {
+                document.documentElement.requestFullscreen().catch(() => {})
+                    .finally(() => { screen.orientation?.lock?.('landscape').catch(() => {}); });
+            }
         }
     }
 

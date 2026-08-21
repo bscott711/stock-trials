@@ -7,6 +7,15 @@
     <title>Stock Trials</title>
     <link rel="icon" href="favicon.ico">
     <link rel="stylesheet" href="styles.css">
+    <script>
+        // Runs synchronously before first paint so the CSS gate below never
+        // flashes. Browsers with no Fullscreen API (iOS Safari in a regular
+        // tab) can't reclaim the chrome-bar space a landscape lock is meant
+        // to earn back, so the rotate-block overlay skips them entirely -
+        // forcing a rotation that buys nothing is worse than just letting
+        // portrait play happen.
+        document.documentElement.classList.toggle('no-fullscreen', !document.documentElement.requestFullscreen);
+    </script>
 </head>
 <body>
     <canvas id="gameCanvas"></canvas>
